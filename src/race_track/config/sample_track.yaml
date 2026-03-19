@@ -1,0 +1,19 @@
+track_name: sample_track
+centerline:
+  - x: 0.0
+    y: 0.0
+  - x: 10.0
+    y: 0.0
+  - x: 20.0
+    y: 5.0
+track_width: 6.5
+start_line:
+  p1:
+    x: 0.0
+    y: -3.25
+  p2:
+    x: 0.0
+    y: 3.25
+forward_hint:
+  x: 1.0
+  y: 0.0
