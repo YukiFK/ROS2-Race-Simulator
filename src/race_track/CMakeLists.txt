@@ -6,6 +6,7 @@ find_package(yaml-cpp REQUIRED)
 
 add_library(${PROJECT_NAME}
   src/track_loader.cpp
+  src/track_validator.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
