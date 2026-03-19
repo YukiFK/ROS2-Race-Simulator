@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>race_interfaces</name>
+  <version>0.0.0</version>
+  <description>Minimal package skeleton for race interface definitions.</description>
+  <maintainer email="fukuda24@example.com">fukuda24</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
