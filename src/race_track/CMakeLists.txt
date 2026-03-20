@@ -5,6 +5,7 @@ find_package(ament_cmake REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 add_library(${PROJECT_NAME}
+  src/geometry.cpp
   src/track_loader.cpp
   src/track_validator.cpp
 )
