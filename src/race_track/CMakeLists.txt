@@ -15,6 +15,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp)
 
+add_executable(track_demo
+  src/track_demo.cpp
+)
+target_compile_definitions(track_demo PRIVATE
+  RACE_TRACK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(track_demo PRIVATE ${PROJECT_NAME})
+
 install(
   DIRECTORY include/
   DESTINATION include
@@ -26,8 +34,11 @@ install(
 )
 
 install(
-  TARGETS ${PROJECT_NAME}
+  TARGETS ${PROJECT_NAME} track_demo
   EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
