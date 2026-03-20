@@ -30,6 +30,25 @@ install(
   EXPORT export_${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_track_loader
+    test/test_track_loader.cpp
+  )
+  target_link_libraries(test_track_loader ${PROJECT_NAME})
+
+  ament_add_gtest(test_track_validator
+    test/test_track_validator.cpp
+  )
+  target_link_libraries(test_track_validator ${PROJECT_NAME})
+
+  ament_add_gtest(test_geometry
+    test/test_geometry.cpp
+  )
+  target_link_libraries(test_geometry ${PROJECT_NAME})
+endif()
+
 ament_export_include_directories(include)
 ament_export_dependencies(yaml-cpp)
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
