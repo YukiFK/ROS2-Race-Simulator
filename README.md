@@ -10,6 +10,7 @@ build / launch / command / expected behavior は [Milestone 1](docs/milestone1.m
 ## Docs
 
 - [Development Validation](docs/dev_validation.md)
+- [Message Responsibility Boundary](docs/message_boundary.md)
 - [Multi-Vehicle Design Memo](docs/multi_vehicle_design.md)
 - [Race Completion Semantics](docs/race_completion_semantics.md)
 - [Review Checklist](docs/review_checklist.md)
