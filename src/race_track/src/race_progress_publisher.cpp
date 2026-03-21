@@ -74,10 +74,15 @@ public:
   : Node("race_progress_publisher"),
     track_(loadTrackFromYaml(sample_track_path.string())),
     progress_tracker_(track_),
+    target_lap_count_(declare_parameter<std::int64_t>("target_lap_count", 2)),
     positions_(
       {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
        {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}})
   {
+    if (target_lap_count_ <= 0) {
+      throw std::runtime_error("target_lap_count must be greater than zero");
+    }
+
     validateTrackOrThrow(track_);
 
     status_publisher_ =
@@ -93,6 +98,7 @@ public:
     RCLCPP_INFO(
       get_logger(), "Loaded track '%s' from %s", track_.track_name.c_str(),
       sample_track_path.c_str());
+    RCLCPP_INFO(get_logger(), "Target lap count: %ld", target_lap_count_);
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
     publishRaceState(currentStepSec(), progress_tracker_.snapshot());
   }
@@ -100,7 +106,7 @@ public:
 private:
   void onTimer()
   {
-    if (!running_) {
+    if (!running_ || completed_) {
       return;
     }
 
@@ -112,13 +118,19 @@ private:
     const std::int32_t step_sec = static_cast<std::int32_t>(step_index_);
     const Point2d & current = positions_[step_index_];
     ProgressUpdate progress_update = progress_tracker_.update(step_sec, current);
+    const bool target_lap_reached =
+      progress_update.snapshot.lap_count >= static_cast<std::int32_t>(target_lap_count_);
 
-    const bool reached_final_step = (step_index_ + 1U) >= positions_.size();
-    if (reached_final_step) {
+    if (target_lap_reached) {
       running_ = false;
       completed_ = true;
       progress_tracker_.setHasFinished(true);
       progress_update.snapshot = progress_tracker_.snapshot();
+    }
+
+    const bool exhausted_positions = !target_lap_reached && (step_index_ + 1U) >= positions_.size();
+    if (exhausted_positions) {
+      running_ = false;
     }
 
     if (progress_update.crossing_detected) {
@@ -137,18 +149,33 @@ private:
       progress_update.crossing_detected ? "true" : "false", progress_update.snapshot.lap_count,
       progress_update.snapshot.off_track_count);
 
-    ++step_index_;
-    if (reached_final_step) {
-      RCLCPP_INFO(get_logger(), "Reached final step, stopping progression");
+    if (target_lap_reached) {
+      RCLCPP_INFO(
+        get_logger(), "Target lap count reached (%d/%ld), marking race completed",
+        progress_update.snapshot.lap_count, target_lap_count_);
+      return;
     }
+
+    if (exhausted_positions) {
+      running_ = false;
+      RCLCPP_WARN(
+        get_logger(),
+        "Progression stopped at end of fixed positions before reaching target laps (%d/%ld)",
+        progress_update.snapshot.lap_count, target_lap_count_);
+      ++step_index_;
+      return;
+    }
+
+    ++step_index_;
   }
 
   void onRaceCommand(const race_interfaces::msg::RaceCommand::SharedPtr msg)
   {
     switch (msg->command) {
       case race_interfaces::msg::RaceCommand::START:
-        if (step_index_ >= positions_.size()) {
-          RCLCPP_INFO(get_logger(), "Received START at final step, resetting progression first");
+        if (completed_ || step_index_ >= positions_.size()) {
+          RCLCPP_INFO(
+            get_logger(), "Received START after completion or final step, resetting progression first");
           resetProgress();
         }
         completed_ = false;
@@ -254,6 +281,7 @@ private:
   bool running_{false};
   bool completed_{false};
   std::size_t step_index_{0U};
+  std::int64_t target_lap_count_{2};
 };
 
 }  // namespace
