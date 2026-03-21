@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(race_track)
 
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(race_interfaces REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -43,6 +44,17 @@ target_link_libraries(race_message_demo
 )
 ament_target_dependencies(race_message_demo race_interfaces)
 
+add_executable(race_progress_publisher
+  src/race_progress_publisher.cpp
+)
+target_compile_definitions(race_progress_publisher PRIVATE
+  RACE_TRACK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(race_progress_publisher
+  ${PROJECT_NAME}
+)
+ament_target_dependencies(race_progress_publisher rclcpp race_interfaces)
+
 install(
   DIRECTORY include/
   DESTINATION include
@@ -54,7 +66,7 @@ install(
 )
 
 install(
-  TARGETS ${PROJECT_NAME} track_demo race_progress_demo race_message_demo
+  TARGETS ${PROJECT_NAME} track_demo race_progress_demo race_message_demo race_progress_publisher
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
