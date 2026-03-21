@@ -267,6 +267,47 @@ ros2 run race_track race_command_cli reset
 - `stop` 実行後、monitor に `race_state status=stopped` が表示されて進行が止まる
 - `reset` 実行後、経過時間とラップ数が初期状態に戻り、monitor に `race_state status=stopped` が表示される
 
+### Current State Semantics in the Single-Vehicle Demo
+
+この節は、現在の最小デモ実装に限った意味を整理したものです。将来の本格的な race manager や multi-vehicle 前提の仕様は、ここでは確定しません。
+
+前提:
+
+- 車両は 1 台のみで、`vehicle_id` は固定の `demo_vehicle_1`
+- `race_progress_publisher` は内部の固定 position 列を 1 秒ごとに順番に消費して進行する
+- `lap_count` は forward 方向の start line crossing を検出したときだけ増える
+- `completed` / `has_finished` は target laps 判定ではなく、固定 position 列の最終 step に到達したときに立つ
+
+状態とフィールドの意味:
+
+| Field | 現在の単一車両デモでの意味 |
+| --- | --- |
+| `RaceState.race_status = stopped` | publisher が進行していない状態。初期状態、`stop` 後、`reset` 後がこれに当たる。 |
+| `RaceState.race_status = running` | publisher が固定 position 列を順に消費中の状態。 |
+| `RaceState.race_status = completed` | 固定 position 列の最終 step に到達し、publisher が進行を停止した状態。周回数条件で遷移しているわけではない。 |
+| `VehicleRaceStatus.lap_count` | その車両について、forward 方向の start line crossing が確定した回数。現在の実装では `ProgressTracker` が crossing ごとに `1` ずつ加算する。 |
+| `VehicleRaceStatus.has_finished` | その車両が現在の最小デモの進行を終えたことを表すフラグ。現状では固定 position 列の最終 step 到達時に `true` になり、`reset` で `false` に戻る。 |
+| `RaceState.total_laps` | 現在 publish 時点の `lap_count` を `RaceState` 側にも載せた値。単一車両デモでは実質的に車両 1 台の確定 lap 数と同じで、target laps や race 完了条件の設定値ではない。 |
+
+補足:
+
+- `LapEvent.lap_count` も crossing 検出後の確定 lap 数を表す
+- `LapEvent.has_finished` は publish 時点の snapshot をそのまま載せるため、現在の実装では通常の lap crossing では `false` のまま
+- 最終 step で `has_finished` は `true` になるが、その step で crossing が発生しない限り、`has_finished=true` の `LapEvent` が必ず出るわけではない
+
+現時点で未確定なこと:
+
+- `RaceState.total_laps` を将来も進捗値として使うか、target laps のような設定値に再定義するか
+- `VehicleRaceStatus.has_finished` を将来の正式な race finish semantics にどう結び付けるか
+- `race_status=completed` の遷移条件を lap 数、順位、全車完了などのどの条件で定義するか
+- `lap_count` の扱いを multi-vehicle 集約とどう切り分けるか
+
+将来の拡張で再整理が必要な点:
+
+- target lap 数を導入する場合、`RaceState.total_laps` という名前は誤解を招くため、意味の再整理または別 field / 別 message の検討が必要
+- finish 条件を高度化する場合、`has_finished` は「デモ終了フラグ」ではなく「レース完了判定」との関係を改めて定義する必要がある
+- multi-vehicle 対応時は、全体 state と各車 state の責務分離を明確にし直す必要がある
+
 ## 関連ファイル / ディレクトリ案内
 
 - `src/race_interfaces/msg/`: message 定義
