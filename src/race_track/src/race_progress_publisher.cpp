@@ -13,6 +13,7 @@
 #include "race_track/completion_evaluator.hpp"
 #include "race_track/geometry.hpp"
 #include "race_track/progress_tracker.hpp"
+#include "race_track/race_state_assembler.hpp"
 #include "race_track/track_loader.hpp"
 #include "race_track/track_validator.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -24,7 +25,6 @@ namespace
 
 constexpr char kVehicleId[] = "demo_vehicle_1";
 constexpr char kFrameId[] = "map";
-
 std::filesystem::path getExecutableDir(const char * argv0)
 {
   if (argv0 == nullptr) {
@@ -223,12 +223,8 @@ private:
 
   void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
   {
-    race_interfaces::msg::RaceState race_state;
-    race_state.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
-    race_state.header.frame_id = kFrameId;
-    race_state.race_status = currentRaceStatus();
-    race_state.elapsed_time = makeDuration(step_sec);
-    race_state.completed_laps = snapshot.lap_count;
+    race_interfaces::msg::RaceState race_state =
+      race_state_assembler_.assemble(currentRaceStatus(), step_sec, snapshot);
     race_state_publisher_->publish(race_state);
   }
 
@@ -273,6 +269,7 @@ private:
   TrackModel track_;
   ProgressTracker progress_tracker_;
   SingleVehicleCompletionEvaluator completion_evaluator_;
+  RaceStateAssembler race_state_assembler_;
   std::vector<Point2d> positions_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;

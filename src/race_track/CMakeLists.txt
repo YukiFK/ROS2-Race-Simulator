@@ -10,6 +10,7 @@ add_library(${PROJECT_NAME}
   src/completion_evaluator.cpp
   src/geometry.cpp
   src/progress_tracker.cpp
+  src/race_state_assembler.cpp
   src/track_loader.cpp
   src/track_validator.cpp
 )
@@ -18,6 +19,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp)
+ament_target_dependencies(${PROJECT_NAME} race_interfaces)
 
 add_executable(track_demo
   src/track_demo.cpp
@@ -118,9 +120,15 @@ if(BUILD_TESTING)
     test/test_completion_evaluator.cpp
   )
   target_link_libraries(test_completion_evaluator ${PROJECT_NAME})
+
+  ament_add_gtest(test_race_state_assembler
+    test/test_race_state_assembler.cpp
+  )
+  target_link_libraries(test_race_state_assembler ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
+ament_export_dependencies(race_interfaces)
 ament_export_dependencies(yaml-cpp)
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 
