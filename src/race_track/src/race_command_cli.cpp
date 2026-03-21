@@ -12,7 +12,8 @@ namespace
 
 constexpr char kTopicName[] = "/race_command";
 constexpr char kFrameId[] = "map";
-constexpr auto kPublisherSetupDelay = std::chrono::milliseconds(200);
+constexpr auto kSubscriptionWaitTimeout = std::chrono::seconds(1);
+constexpr auto kSubscriptionPollInterval = std::chrono::milliseconds(50);
 constexpr auto kPublishFlushDelay = std::chrono::milliseconds(200);
 
 void printUsage(const char * program_name)
@@ -67,7 +68,17 @@ int main(int argc, char ** argv)
   auto node = std::make_shared<rclcpp::Node>("race_command_cli");
   auto publisher = node->create_publisher<race_interfaces::msg::RaceCommand>(kTopicName, 10);
 
-  rclcpp::sleep_for(kPublisherSetupDelay);
+  const auto wait_deadline = std::chrono::steady_clock::now() + kSubscriptionWaitTimeout;
+  while (publisher->get_subscription_count() == 0U &&
+    std::chrono::steady_clock::now() < wait_deadline)
+  {
+    rclcpp::spin_some(node);
+    rclcpp::sleep_for(kSubscriptionPollInterval);
+  }
+
+  if (publisher->get_subscription_count() == 0U) {
+    RCLCPP_WARN(node->get_logger(), "no subscribers connected to %s before publish", kTopicName);
+  }
 
   race_interfaces::msg::RaceCommand message;
   message.header.stamp = node->get_clock()->now();
