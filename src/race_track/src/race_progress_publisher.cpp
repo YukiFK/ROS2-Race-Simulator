@@ -8,6 +8,7 @@
 
 #include "builtin_interfaces/msg/duration.hpp"
 #include "race_interfaces/msg/lap_event.hpp"
+#include "race_interfaces/msg/race_command.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
 #include "race_track/geometry.hpp"
 #include "race_track/track_loader.hpp"
@@ -80,19 +81,27 @@ public:
     status_publisher_ =
       create_publisher<race_interfaces::msg::VehicleRaceStatus>("/vehicle_race_status", 10);
     lap_event_publisher_ = create_publisher<race_interfaces::msg::LapEvent>("/lap_event", 10);
+    command_subscriber_ = create_subscription<race_interfaces::msg::RaceCommand>(
+      "/race_command", 10,
+      std::bind(&RaceProgressPublisher::onRaceCommand, this, std::placeholders::_1));
     timer_ = create_wall_timer(
       std::chrono::seconds(1), std::bind(&RaceProgressPublisher::onTimer, this));
 
     RCLCPP_INFO(
       get_logger(), "Loaded track '%s' from %s", track_.track_name.c_str(),
       sample_track_path.c_str());
+    RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
   }
 
 private:
   void onTimer()
   {
+    if (!running_) {
+      return;
+    }
+
     if (step_index_ >= positions_.size()) {
-      timer_->cancel();
+      running_ = false;
       return;
     }
 
@@ -125,9 +134,46 @@ private:
 
     ++step_index_;
     if (step_index_ >= positions_.size()) {
-      RCLCPP_INFO(get_logger(), "Reached final step, stopping publisher timer");
-      timer_->cancel();
+      running_ = false;
+      RCLCPP_INFO(get_logger(), "Reached final step, stopping progression");
     }
+  }
+
+  void onRaceCommand(const race_interfaces::msg::RaceCommand::SharedPtr msg)
+  {
+    switch (msg->command) {
+      case race_interfaces::msg::RaceCommand::START:
+        if (step_index_ >= positions_.size()) {
+          RCLCPP_INFO(get_logger(), "Received START at final step, resetting progression first");
+          resetProgress();
+        }
+        running_ = true;
+        RCLCPP_INFO(get_logger(), "Received START command, progression started");
+        break;
+      case race_interfaces::msg::RaceCommand::STOP:
+        running_ = false;
+        RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
+        break;
+      case race_interfaces::msg::RaceCommand::RESET:
+        resetProgress();
+        RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
+        break;
+      default:
+        RCLCPP_WARN(get_logger(), "Received unknown race command: %u", msg->command);
+        break;
+    }
+  }
+
+  void resetProgress()
+  {
+    running_ = false;
+    step_index_ = 0U;
+    lap_count_ = 0;
+    off_track_count_ = 0;
+    lap_start_step_sec_ = 0;
+    last_lap_time_sec_ = 0;
+    best_lap_time_sec_ = 0;
+    best_lap_time_candidate_sec_ = std::numeric_limits<std::int32_t>::max();
   }
 
   void publishLapEvent(const std::int32_t step_sec)
@@ -173,7 +219,9 @@ private:
   std::vector<Point2d> positions_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;
+  rclcpp::Subscription<race_interfaces::msg::RaceCommand>::SharedPtr command_subscriber_;
   rclcpp::TimerBase::SharedPtr timer_;
+  bool running_{false};
   std::size_t step_index_{0U};
   std::int32_t lap_count_{0};
   std::int32_t off_track_count_{0};
