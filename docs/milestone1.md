@@ -205,12 +205,15 @@ colcon test-result --verbose
 
 ## 最小 race progress demo
 
-現在の最小デモは次の 2 ノードで構成されています。
+現在の最小デモは次の 3 つで構成されています。
 
 - `race_progress_publisher`: `/race_command` を受けて `/race_state`、`/vehicle_race_status`、`/lap_event` を publish する
 - `race_progress_monitor`: `/race_state`、`/vehicle_race_status`、`/lap_event` を subscribe して画面に表示する
+- `race_command_cli`: `start` / `stop` / `reset` を `/race_command` に publish する
 
-ワークスペース直下で build します。
+### Build
+
+ワークスペース直下で実行します。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -218,7 +221,9 @@ colcon build
 source install/setup.bash
 ```
 
-別ターミナルで demo を起動します。
+### Launch
+
+別ターミナルで最小デモを起動します。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -226,38 +231,41 @@ source install/setup.bash
 ros2 launch race_track race_progress_demo.launch.py
 ```
 
-もう 1 つ別ターミナルを開き、`RaceCommand` を送ります。
+### Command CLI
+
+もう 1 つ別ターミナルを開き、`race_command_cli` で操作します。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
-START (`command: 0`)
+start:
 
 ```bash
-ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 0}"
+ros2 run race_track race_command_cli start
 ```
 
-STOP (`command: 1`)
+stop:
 
 ```bash
-ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 1}"
+ros2 run race_track race_command_cli stop
 ```
 
-RESET (`command: 2`)
+reset:
 
 ```bash
-ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 2}"
+ros2 run race_track race_command_cli reset
 ```
 
-期待される挙動:
+### Expected Behavior
 
 - launch 直後、monitor に `race_state status=stopped` が表示される
-- `START` 送信後、monitor に `race_state` と `vehicle_race_status` が継続して表示される
+- `start` 実行後、monitor に `race_state status=running` と `vehicle_race_status` が継続して表示される
 - スタートライン通過時に `lap_event` が表示される
-- `STOP` 送信後、`race_state status=stopped` が表示されて進行が止まる
-- `RESET` 送信後、経過とラップ数が初期状態に戻り、`race_state status=stopped` が表示される
+- 最終 step 到達後、monitor に `race_state status=completed` が表示される
+- `stop` 実行後、monitor に `race_state status=stopped` が表示されて進行が止まる
+- `reset` 実行後、経過時間とラップ数が初期状態に戻り、monitor に `race_state status=stopped` が表示される
 
 ## 関連ファイル / ディレクトリ案内
 
