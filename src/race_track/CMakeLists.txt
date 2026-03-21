@@ -23,6 +23,14 @@ target_compile_definitions(track_demo PRIVATE
 )
 target_link_libraries(track_demo PRIVATE ${PROJECT_NAME})
 
+add_executable(race_progress_demo
+  src/race_progress_demo.cpp
+)
+target_compile_definitions(race_progress_demo PRIVATE
+  RACE_TRACK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(race_progress_demo PRIVATE ${PROJECT_NAME})
+
 install(
   DIRECTORY include/
   DESTINATION include
@@ -34,7 +42,7 @@ install(
 )
 
 install(
-  TARGETS ${PROJECT_NAME} track_demo
+  TARGETS ${PROJECT_NAME} track_demo race_progress_demo
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
