@@ -16,6 +16,7 @@
 #include "race_track/race_state_assembler.hpp"
 #include "race_track/track_loader.hpp"
 #include "race_track/track_validator.hpp"
+#include "race_track/vehicle_race_status_assembler.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace race_track
@@ -231,19 +232,8 @@ private:
   void publishVehicleRaceStatus(
     const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
-    race_interfaces::msg::VehicleRaceStatus status;
-    status.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
-    status.header.frame_id = kFrameId;
-    status.vehicle_id = kVehicleId;
-    status.lap_count = progress_update.snapshot.lap_count;
-    status.current_lap_time = makeDuration(step_sec - progress_update.snapshot.lap_start_step_sec);
-    status.last_lap_time = makeDuration(progress_update.snapshot.last_lap_time_sec);
-    status.best_lap_time = makeDuration(progress_update.snapshot.best_lap_time_sec);
-    status.total_elapsed_time = makeDuration(step_sec);
-    status.has_finished = progress_update.snapshot.has_finished;
-    status.is_off_track = progress_update.is_off_track;
-    status.off_track_count = progress_update.snapshot.off_track_count;
-    status_publisher_->publish(status);
+    status_publisher_->publish(
+      vehicle_race_status_assembler_.assemble(step_sec, kVehicleId, progress_update));
   }
 
   std::int32_t currentStepSec() const
@@ -270,6 +260,7 @@ private:
   ProgressTracker progress_tracker_;
   SingleVehicleCompletionEvaluator completion_evaluator_;
   RaceStateAssembler race_state_assembler_;
+  VehicleRaceStatusAssembler vehicle_race_status_assembler_;
   std::vector<Point2d> positions_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;

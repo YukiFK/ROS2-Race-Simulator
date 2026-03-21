@@ -13,6 +13,7 @@ add_library(${PROJECT_NAME}
   src/race_state_assembler.cpp
   src/track_loader.cpp
   src/track_validator.cpp
+  src/vehicle_race_status_assembler.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -125,6 +126,11 @@ if(BUILD_TESTING)
     test/test_race_state_assembler.cpp
   )
   target_link_libraries(test_race_state_assembler ${PROJECT_NAME})
+
+  ament_add_gtest(test_vehicle_race_status_assembler
+    test/test_vehicle_race_status_assembler.cpp
+  )
+  target_link_libraries(test_vehicle_race_status_assembler ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
