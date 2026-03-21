@@ -60,6 +60,11 @@ add_executable(race_progress_monitor
 )
 ament_target_dependencies(race_progress_monitor rclcpp race_interfaces)
 
+add_executable(race_command_cli
+  src/race_command_cli.cpp
+)
+ament_target_dependencies(race_command_cli rclcpp race_interfaces)
+
 install(
   DIRECTORY include/
   DESTINATION include
@@ -77,7 +82,7 @@ install(
 
 install(
   TARGETS ${PROJECT_NAME} track_demo race_progress_demo race_message_demo race_progress_publisher
-    race_progress_monitor
+    race_progress_monitor race_command_cli
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
