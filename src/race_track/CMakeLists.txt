@@ -71,6 +71,11 @@ install(
 )
 
 install(
+  DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(
   TARGETS ${PROJECT_NAME} track_demo race_progress_demo race_message_demo race_progress_publisher
     race_progress_monitor
   EXPORT export_${PROJECT_NAME}
