@@ -3,4 +3,4 @@ std_msgs/Header header
 string race_status
 builtin_interfaces/Duration elapsed_time
 
-int32 total_laps
+int32 completed_laps

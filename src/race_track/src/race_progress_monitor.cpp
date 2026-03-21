@@ -46,8 +46,8 @@ private:
   void onRaceState(const race_interfaces::msg::RaceState::SharedPtr msg) const
   {
     RCLCPP_INFO(
-      get_logger(), "race_state status=%s elapsed=%s total_laps=%d",
-      msg->race_status.c_str(), formatDuration(msg->elapsed_time).c_str(), msg->total_laps);
+      get_logger(), "race_state status=%s elapsed=%s completed_laps=%d",
+      msg->race_status.c_str(), formatDuration(msg->elapsed_time).c_str(), msg->completed_laps);
   }
 
   void onVehicleRaceStatus(
