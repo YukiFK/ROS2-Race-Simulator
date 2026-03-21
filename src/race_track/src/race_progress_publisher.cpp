@@ -228,7 +228,7 @@ private:
     race_state.header.frame_id = kFrameId;
     race_state.race_status = currentRaceStatus();
     race_state.elapsed_time = makeDuration(step_sec);
-    race_state.total_laps = snapshot.lap_count;
+    race_state.completed_laps = snapshot.lap_count;
     race_state_publisher_->publish(race_state);
   }
 
