@@ -5,13 +5,13 @@
 #include <string>
 #include <vector>
 
-#include "builtin_interfaces/msg/duration.hpp"
 #include "race_interfaces/msg/lap_event.hpp"
 #include "race_interfaces/msg/race_command.hpp"
 #include "race_interfaces/msg/race_state.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
 #include "race_track/completion_evaluator.hpp"
 #include "race_track/geometry.hpp"
+#include "race_track/lap_event_assembler.hpp"
 #include "race_track/progress_tracker.hpp"
 #include "race_track/race_state_assembler.hpp"
 #include "race_track/track_loader.hpp"
@@ -25,7 +25,6 @@ namespace
 {
 
 constexpr char kVehicleId[] = "demo_vehicle_1";
-constexpr char kFrameId[] = "map";
 std::filesystem::path getExecutableDir(const char * argv0)
 {
   if (argv0 == nullptr) {
@@ -59,14 +58,6 @@ std::filesystem::path resolveSampleTrackPath(const char * argv0)
   }
 
   throw std::runtime_error("Failed to locate config/sample_track.yaml");
-}
-
-builtin_interfaces::msg::Duration makeDuration(const std::int32_t seconds)
-{
-  builtin_interfaces::msg::Duration duration;
-  duration.sec = seconds;
-  duration.nanosec = 0U;
-  return duration;
 }
 
 class RaceProgressPublisher : public rclcpp::Node
@@ -211,15 +202,8 @@ private:
 
   void publishLapEvent(const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
-    race_interfaces::msg::LapEvent lap_event;
-    lap_event.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
-    lap_event.header.frame_id = kFrameId;
-    lap_event.vehicle_id = kVehicleId;
-    lap_event.lap_count = progress_update.snapshot.lap_count;
-    lap_event.lap_time = makeDuration(progress_update.crossed_lap_time_sec);
-    lap_event.best_lap_time = makeDuration(progress_update.snapshot.best_lap_time_sec);
-    lap_event.has_finished = progress_update.snapshot.has_finished;
-    lap_event_publisher_->publish(lap_event);
+    lap_event_publisher_->publish(
+      lap_event_assembler_.assemble(step_sec, kVehicleId, progress_update));
   }
 
   void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
@@ -259,6 +243,7 @@ private:
   TrackModel track_;
   ProgressTracker progress_tracker_;
   SingleVehicleCompletionEvaluator completion_evaluator_;
+  LapEventAssembler lap_event_assembler_;
   RaceStateAssembler race_state_assembler_;
   VehicleRaceStatusAssembler vehicle_race_status_assembler_;
   std::vector<Point2d> positions_;

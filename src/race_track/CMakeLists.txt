@@ -9,6 +9,7 @@ find_package(yaml-cpp REQUIRED)
 add_library(${PROJECT_NAME}
   src/completion_evaluator.cpp
   src/geometry.cpp
+  src/lap_event_assembler.cpp
   src/progress_tracker.cpp
   src/race_state_assembler.cpp
   src/track_loader.cpp
@@ -126,6 +127,11 @@ if(BUILD_TESTING)
     test/test_race_state_assembler.cpp
   )
   target_link_libraries(test_race_state_assembler ${PROJECT_NAME})
+
+  ament_add_gtest(test_lap_event_assembler
+    test/test_lap_event_assembler.cpp
+  )
+  target_link_libraries(test_lap_event_assembler ${PROJECT_NAME})
 
   ament_add_gtest(test_vehicle_race_status_assembler
     test/test_vehicle_race_status_assembler.cpp
