@@ -203,6 +203,62 @@ colcon test-result --verbose
 
 `race_interfaces` は message 生成パッケージのため、独自の test ターゲットは定義されていません。
 
+## 最小 race progress demo
+
+現在の最小デモは次の 2 ノードで構成されています。
+
+- `race_progress_publisher`: `/race_command` を受けて `/race_state`、`/vehicle_race_status`、`/lap_event` を publish する
+- `race_progress_monitor`: `/race_state`、`/vehicle_race_status`、`/lap_event` を subscribe して画面に表示する
+
+ワークスペース直下で build します。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build
+source install/setup.bash
+```
+
+別ターミナルで demo を起動します。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch race_track race_progress_demo.launch.py
+```
+
+もう 1 つ別ターミナルを開き、`RaceCommand` を送ります。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+```
+
+START (`command: 0`)
+
+```bash
+ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 0}"
+```
+
+STOP (`command: 1`)
+
+```bash
+ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 1}"
+```
+
+RESET (`command: 2`)
+
+```bash
+ros2 topic pub --once /race_command race_interfaces/msg/RaceCommand "{header: {frame_id: 'map'}, command: 2}"
+```
+
+期待される挙動:
+
+- launch 直後、monitor に `race_state status=stopped` が表示される
+- `START` 送信後、monitor に `race_state` と `vehicle_race_status` が継続して表示される
+- スタートライン通過時に `lap_event` が表示される
+- `STOP` 送信後、`race_state status=stopped` が表示されて進行が止まる
+- `RESET` 送信後、経過とラップ数が初期状態に戻り、`race_state status=stopped` が表示される
+
 ## 関連ファイル / ディレクトリ案内
 
 - `src/race_interfaces/msg/`: message 定義
