@@ -10,5 +10,6 @@ build / launch / command / expected behavior は [Milestone 1](docs/milestone1.m
 ## Docs
 
 - [Development Validation](docs/dev_validation.md)
+- [Multi-Vehicle Design Memo](docs/multi_vehicle_design.md)
 - [Review Checklist](docs/review_checklist.md)
 - [Milestone 1](docs/milestone1.md)
