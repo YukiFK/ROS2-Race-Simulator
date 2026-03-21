@@ -12,6 +12,7 @@ add_library(${PROJECT_NAME}
   src/lap_event_assembler.cpp
   src/progress_tracker.cpp
   src/race_state_assembler.cpp
+  src/single_vehicle_runtime.cpp
   src/track_loader.cpp
   src/track_validator.cpp
   src/vehicle_race_status_assembler.cpp
@@ -137,6 +138,11 @@ if(BUILD_TESTING)
     test/test_vehicle_race_status_assembler.cpp
   )
   target_link_libraries(test_vehicle_race_status_assembler ${PROJECT_NAME})
+
+  ament_add_gtest(test_single_vehicle_runtime
+    test/test_single_vehicle_runtime.cpp
+  )
+  target_link_libraries(test_single_vehicle_runtime ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
