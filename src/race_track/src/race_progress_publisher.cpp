@@ -10,6 +10,7 @@
 #include "race_interfaces/msg/race_command.hpp"
 #include "race_interfaces/msg/race_state.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
+#include "race_track/completion_evaluator.hpp"
 #include "race_track/geometry.hpp"
 #include "race_track/progress_tracker.hpp"
 #include "race_track/track_loader.hpp"
@@ -118,18 +119,17 @@ private:
     const std::int32_t step_sec = static_cast<std::int32_t>(step_index_);
     const Point2d & current = positions_[step_index_];
     ProgressUpdate progress_update = progress_tracker_.update(step_sec, current);
-    const bool target_lap_reached =
-      progress_update.snapshot.lap_count >= static_cast<std::int32_t>(target_lap_count_);
+    const CompletionDecision decision = completion_evaluator_.evaluate(
+      progress_update.snapshot, step_index_, positions_.size(), target_lap_count_);
 
-    if (target_lap_reached) {
+    if (decision.should_complete) {
       running_ = false;
       completed_ = true;
       progress_tracker_.setHasFinished(true);
       progress_update.snapshot = progress_tracker_.snapshot();
     }
 
-    const bool exhausted_positions = !target_lap_reached && (step_index_ + 1U) >= positions_.size();
-    if (exhausted_positions) {
+    if (decision.should_stop_without_completion) {
       running_ = false;
     }
 
@@ -149,14 +149,14 @@ private:
       progress_update.crossing_detected ? "true" : "false", progress_update.snapshot.lap_count,
       progress_update.snapshot.off_track_count);
 
-    if (target_lap_reached) {
+    if (decision.should_complete) {
       RCLCPP_INFO(
         get_logger(), "Target lap count reached (%d/%ld), marking race completed",
         progress_update.snapshot.lap_count, target_lap_count_);
       return;
     }
 
-    if (exhausted_positions) {
+    if (decision.should_stop_without_completion) {
       running_ = false;
       RCLCPP_WARN(
         get_logger(),
@@ -272,6 +272,7 @@ private:
 
   TrackModel track_;
   ProgressTracker progress_tracker_;
+  SingleVehicleCompletionEvaluator completion_evaluator_;
   std::vector<Point2d> positions_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;

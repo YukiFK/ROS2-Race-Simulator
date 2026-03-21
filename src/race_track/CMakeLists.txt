@@ -7,6 +7,7 @@ find_package(race_interfaces REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 add_library(${PROJECT_NAME}
+  src/completion_evaluator.cpp
   src/geometry.cpp
   src/progress_tracker.cpp
   src/track_loader.cpp
@@ -112,6 +113,11 @@ if(BUILD_TESTING)
     test/test_progress_tracker.cpp
   )
   target_link_libraries(test_progress_tracker ${PROJECT_NAME})
+
+  ament_add_gtest(test_completion_evaluator
+    test/test_completion_evaluator.cpp
+  )
+  target_link_libraries(test_completion_evaluator ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
