@@ -8,6 +8,7 @@ find_package(yaml-cpp REQUIRED)
 
 add_library(${PROJECT_NAME}
   src/geometry.cpp
+  src/progress_tracker.cpp
   src/track_loader.cpp
   src/track_validator.cpp
 )
@@ -106,6 +107,11 @@ if(BUILD_TESTING)
     test/test_geometry.cpp
   )
   target_link_libraries(test_geometry ${PROJECT_NAME})
+
+  ament_add_gtest(test_progress_tracker
+    test/test_progress_tracker.cpp
+  )
+  target_link_libraries(test_progress_tracker ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)

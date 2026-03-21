@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -12,6 +11,7 @@
 #include "race_interfaces/msg/race_state.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
 #include "race_track/geometry.hpp"
+#include "race_track/progress_tracker.hpp"
 #include "race_track/track_loader.hpp"
 #include "race_track/track_validator.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -73,6 +73,7 @@ public:
   explicit RaceProgressPublisher(const std::filesystem::path & sample_track_path)
   : Node("race_progress_publisher"),
     track_(loadTrackFromYaml(sample_track_path.string())),
+    progress_tracker_(track_),
     positions_(
       {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
        {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}})
@@ -93,7 +94,7 @@ public:
       get_logger(), "Loaded track '%s' from %s", track_.track_name.c_str(),
       sample_track_path.c_str());
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
-    publishRaceState(currentStepSec());
+    publishRaceState(currentStepSec(), progress_tracker_.snapshot());
   }
 
 private:
@@ -110,37 +111,34 @@ private:
 
     const std::int32_t step_sec = static_cast<std::int32_t>(step_index_);
     const Point2d & current = positions_[step_index_];
-    const std::size_t nearest_index = findNearestCenterlineIndex(track_.centerline, current);
-    const double distance = distanceToCenterline(track_.centerline, current);
-    const bool is_off_track = distance > (track_.track_width / 2.0);
-    if (is_off_track) {
-      ++off_track_count_;
+    ProgressUpdate progress_update = progress_tracker_.update(step_sec, current);
+
+    const bool reached_final_step = (step_index_ + 1U) >= positions_.size();
+    if (reached_final_step) {
+      running_ = false;
+      completed_ = true;
+      progress_tracker_.setHasFinished(true);
+      progress_update.snapshot = progress_tracker_.snapshot();
     }
 
-    bool crossing_detected = false;
-    if (step_index_ > 0U) {
-      crossing_detected = isForwardCrossingStartLine(
-        positions_[step_index_ - 1U], current, track_.start_line, track_.forward_hint);
-      if (crossing_detected) {
-        publishLapEvent(step_sec);
-      }
+    if (progress_update.crossing_detected) {
+      publishLapEvent(step_sec, progress_update);
     }
 
-    publishVehicleRaceStatus(step_sec, is_off_track);
-    publishRaceState(step_sec);
+    publishVehicleRaceStatus(step_sec, progress_update);
+    publishRaceState(step_sec, progress_update.snapshot);
 
     RCLCPP_INFO(
       get_logger(),
       "step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
       "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
-      step_index_, current.x, current.y, nearest_index, distance, is_off_track ? "true" : "false",
-      crossing_detected ? "true" : "false", lap_count_, off_track_count_);
+      step_index_, current.x, current.y, progress_update.nearest_centerline_index,
+      progress_update.distance_to_centerline, progress_update.is_off_track ? "true" : "false",
+      progress_update.crossing_detected ? "true" : "false", progress_update.snapshot.lap_count,
+      progress_update.snapshot.off_track_count);
 
     ++step_index_;
-    if (step_index_ >= positions_.size()) {
-      running_ = false;
-      completed_ = true;
-      publishRaceState(step_sec);
+    if (reached_final_step) {
       RCLCPP_INFO(get_logger(), "Reached final step, stopping progression");
     }
   }
@@ -155,18 +153,18 @@ private:
         }
         completed_ = false;
         running_ = true;
-        publishRaceState(currentStepSec());
+        publishRaceState(currentStepSec(), progress_tracker_.snapshot());
         RCLCPP_INFO(get_logger(), "Received START command, progression started");
         break;
       case race_interfaces::msg::RaceCommand::STOP:
         running_ = false;
         completed_ = false;
-        publishRaceState(currentStepSec());
+        publishRaceState(currentStepSec(), progress_tracker_.snapshot());
         RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
         break;
       case race_interfaces::msg::RaceCommand::RESET:
         resetProgress();
-        publishRaceState(currentStepSec());
+        publishRaceState(currentStepSec(), progress_tracker_.snapshot());
         RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
         break;
       default:
@@ -180,61 +178,48 @@ private:
     running_ = false;
     completed_ = false;
     step_index_ = 0U;
-    lap_count_ = 0;
-    off_track_count_ = 0;
-    lap_start_step_sec_ = 0;
-    last_lap_time_sec_ = 0;
-    best_lap_time_sec_ = 0;
-    best_lap_time_candidate_sec_ = std::numeric_limits<std::int32_t>::max();
+    progress_tracker_.reset();
   }
 
-  void publishLapEvent(const std::int32_t step_sec)
+  void publishLapEvent(const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
-    const std::int32_t lap_time_sec = step_sec - lap_start_step_sec_;
-    ++lap_count_;
-    last_lap_time_sec_ = lap_time_sec;
-    if (lap_time_sec < best_lap_time_candidate_sec_) {
-      best_lap_time_candidate_sec_ = lap_time_sec;
-      best_lap_time_sec_ = lap_time_sec;
-    }
-    lap_start_step_sec_ = step_sec;
-
     race_interfaces::msg::LapEvent lap_event;
     lap_event.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
     lap_event.header.frame_id = kFrameId;
     lap_event.vehicle_id = kVehicleId;
-    lap_event.lap_count = lap_count_;
-    lap_event.lap_time = makeDuration(lap_time_sec);
-    lap_event.best_lap_time = makeDuration(best_lap_time_sec_);
-    lap_event.has_finished = false;
+    lap_event.lap_count = progress_update.snapshot.lap_count;
+    lap_event.lap_time = makeDuration(progress_update.crossed_lap_time_sec);
+    lap_event.best_lap_time = makeDuration(progress_update.snapshot.best_lap_time_sec);
+    lap_event.has_finished = progress_update.snapshot.has_finished;
     lap_event_publisher_->publish(lap_event);
   }
 
-  void publishRaceState(const std::int32_t step_sec)
+  void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
   {
     race_interfaces::msg::RaceState race_state;
     race_state.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
     race_state.header.frame_id = kFrameId;
     race_state.race_status = currentRaceStatus();
     race_state.elapsed_time = makeDuration(step_sec);
-    race_state.total_laps = lap_count_;
+    race_state.total_laps = snapshot.lap_count;
     race_state_publisher_->publish(race_state);
   }
 
-  void publishVehicleRaceStatus(const std::int32_t step_sec, const bool is_off_track)
+  void publishVehicleRaceStatus(
+    const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
     race_interfaces::msg::VehicleRaceStatus status;
     status.header.stamp = rclcpp::Time(step_sec, 0U, RCL_ROS_TIME);
     status.header.frame_id = kFrameId;
     status.vehicle_id = kVehicleId;
-    status.lap_count = lap_count_;
-    status.current_lap_time = makeDuration(step_sec - lap_start_step_sec_);
-    status.last_lap_time = makeDuration(last_lap_time_sec_);
-    status.best_lap_time = makeDuration(best_lap_time_sec_);
+    status.lap_count = progress_update.snapshot.lap_count;
+    status.current_lap_time = makeDuration(step_sec - progress_update.snapshot.lap_start_step_sec);
+    status.last_lap_time = makeDuration(progress_update.snapshot.last_lap_time_sec);
+    status.best_lap_time = makeDuration(progress_update.snapshot.best_lap_time_sec);
     status.total_elapsed_time = makeDuration(step_sec);
-    status.has_finished = false;
-    status.is_off_track = is_off_track;
-    status.off_track_count = off_track_count_;
+    status.has_finished = progress_update.snapshot.has_finished;
+    status.is_off_track = progress_update.is_off_track;
+    status.off_track_count = progress_update.snapshot.off_track_count;
     status_publisher_->publish(status);
   }
 
@@ -259,6 +244,7 @@ private:
   }
 
   TrackModel track_;
+  ProgressTracker progress_tracker_;
   std::vector<Point2d> positions_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;
@@ -268,12 +254,6 @@ private:
   bool running_{false};
   bool completed_{false};
   std::size_t step_index_{0U};
-  std::int32_t lap_count_{0};
-  std::int32_t off_track_count_{0};
-  std::int32_t lap_start_step_sec_{0};
-  std::int32_t last_lap_time_sec_{0};
-  std::int32_t best_lap_time_sec_{0};
-  std::int32_t best_lap_time_candidate_sec_{std::numeric_limits<std::int32_t>::max()};
 };
 
 }  // namespace
