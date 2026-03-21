@@ -285,27 +285,60 @@ ros2 run race_track race_command_cli reset
 
 状態とフィールドの意味:
 
+### race-level state と vehicle-level state の責務境界
+
+この節は current single-vehicle demo の実装に限った整理です。将来の multi-vehicle race や race manager の正式仕様をここで確定するものではありません。
+
+| 要素 | current single-vehicle demo での責務 |
+| --- | --- |
+| `RaceState` | race-level の実行状態を表す。主に publisher 全体が `stopped` / `running` / `completed` のどこにいるかを伝えるための state であり、車両 progress の主情報源ではない。 |
+| `VehicleRaceStatus` | 車両単位の progress を表す主情報源。`lap_count`、lap time 群、`has_finished` はこの message を基準に読む。 |
+| `LapEvent` | start line crossing が確定した瞬間のイベント通知。常時の最新状態を保持する用途ではなく、lap 完了時の 1 回分の event として使う。 |
+
+### current single-vehicle demo での各フィールドの意味
+
 | Field | 現在の単一車両デモでの意味 |
 | --- | --- |
 | `RaceState.race_status = stopped` | publisher が進行していない状態。初期状態、`stop` 後、`reset` 後がこれに当たる。 |
 | `RaceState.race_status = running` | publisher が固定 position 列を順に消費中の状態。 |
-| `RaceState.race_status = completed` | `lap_count >= target_lap_count` が成立し、publisher が進行を停止した状態。 |
+| `RaceState.race_status = completed` | `VehicleRaceStatus.lap_count >= target_lap_count` が成立し、publisher が進行を停止した状態。 |
 | `VehicleRaceStatus.lap_count` | その車両について、forward 方向の start line crossing が確定した回数。現在の実装では `ProgressTracker` が crossing ごとに `1` ずつ加算する。 |
-| `VehicleRaceStatus.has_finished` | その車両が現在の最小デモで target lap に到達したことを表すフラグ。`lap_count >= target_lap_count` で `true` になり、`reset` で `false` に戻る。 |
-| `RaceState.total_laps` | 現在 publish 時点の `lap_count` を `RaceState` 側にも載せた値。単一車両デモでは実質的に車両 1 台の確定 lap 数と同じで、target lap 設定値そのものではない。 |
+| `VehicleRaceStatus.has_finished` | その車両が current single-vehicle demo の target lap に到達したことを表すフラグ。`lap_count >= target_lap_count` で `true` になり、`reset` で `false` に戻る。 |
+| `LapEvent.lap_count` | crossing 検出後の確定 lap 数を、その event 時点の値として載せたもの。 |
+| `LapEvent.has_finished` | publish 時点の snapshot をそのまま載せるため、target lap に到達した crossing では `true` になる。 |
+
+### `RaceState.total_laps` の整理
+
+現在の意味:
+
+- `RaceState.total_laps` は、current single-vehicle demo では publish 時点の車両 1 台分の確定 `lap_count` を `RaceState` 側にも載せた値。
+- 実質的には、その時点の `VehicleRaceStatus.lap_count` と同じ進捗値を race-level message に重ねている。
+- progress を読む主情報源は引き続き `VehicleRaceStatus` であり、`RaceState.total_laps` は補助的な重複値として扱う。
+
+誤用してはいけない意味:
+
+- `target_lap_count` のような目標周回数を表す値として解釈してはいけない。
+- race 全体で走るべき total race laps を表す設定値として解釈してはいけない。
+- multi-vehicle 時の全車 aggregate lap 数を表す値として解釈してはいけない。
+- 将来の順位判定や全体完了判定に使う正式な race-wide progress 指標だとみなしてはいけない。
 
 補足:
 
-- `LapEvent.lap_count` も crossing 検出後の確定 lap 数を表す
-- `LapEvent.has_finished` は publish 時点の snapshot をそのまま載せるため、target lap に到達した crossing では `true` になる
-- target 未達のまま固定 position 列が尽きた場合、publisher は停止するが `has_finished` は `false` のまま
+- target 未達のまま固定 position 列が尽きた場合、publisher は停止するが `VehicleRaceStatus.has_finished` は `false` のまま。
+- このとき `RaceState.total_laps` も「その時点までに確定した lap 数」を保持するだけで、未達である事実を補完する意味は持たない。
+
+将来の見直し候補:
+
+- `RaceState.total_laps` は rename して、単一車両の progress 複製値であることを明確にする余地がある。
+- race-level state と vehicle-level progress を明確に分けるため、将来は field を split して race state から lap progress を外す余地がある。
+- multi-vehicle 化や race manager 導入時は、target laps、race-wide aggregate、vehicle-local lap count を別々の表現に分離する再設計が必要になる可能性がある。
+- ただし、どの名前や message 構成にするかは現時点では未確定であり、この文書では確定しない。
 
 現時点で未確定なこと:
 
-- `RaceState.total_laps` を将来も進捗値として使うか、target laps のような設定値に再定義するか
 - `VehicleRaceStatus.has_finished` を将来の正式な race finish semantics にどう結び付けるか
 - `race_status=completed` の遷移条件を lap 数、順位、全車完了などのどの条件で定義するか
-- `lap_count` の扱いを multi-vehicle 集約とどう切り分けるか
+- multi-vehicle 対応時に、race-level state と vehicle-level progress をどの message 境界で分離するか
 
 将来の拡張で再整理が必要な点:
 
