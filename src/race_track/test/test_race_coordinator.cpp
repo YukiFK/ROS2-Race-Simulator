@@ -75,6 +75,8 @@ TEST(RaceCoordinatorTest, OwnsFixedVehicleRuntimeForEachParticipatingVehicleId)
   SingleVehicleRuntime & beta_runtime = coordinator.runtime_for_vehicle("beta_vehicle");
 
   EXPECT_EQ(&alpha_runtime, &coordinator.primary_runtime());
+  EXPECT_EQ(&alpha_runtime, &coordinator.runtime_at(0U));
+  EXPECT_EQ(&beta_runtime, &coordinator.runtime_at(1U));
   EXPECT_NE(&alpha_runtime, &beta_runtime);
 
   EXPECT_FALSE(alpha_runtime.running());
@@ -92,6 +94,7 @@ TEST(RaceCoordinatorTest, RejectsUnknownParticipatingVehicleIdLookup)
     makeTrack(), RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle"},
     makeRuntimePositions(), 2);
 
+  EXPECT_THROW(static_cast<void>(coordinator.runtime_at(2U)), std::out_of_range);
   EXPECT_THROW(
     static_cast<void>(coordinator.runtime_for_vehicle("missing_vehicle")), std::out_of_range);
 }

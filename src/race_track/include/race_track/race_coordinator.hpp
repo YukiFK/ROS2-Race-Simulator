@@ -35,6 +35,8 @@ public:
   const TrackModel & track() const;
   const SingleVehicleRuntime & primary_runtime() const;
   SingleVehicleRuntime & primary_runtime();
+  const SingleVehicleRuntime & runtime_at(std::size_t vehicle_index) const;
+  SingleVehicleRuntime & runtime_at(std::size_t vehicle_index);
   const SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id) const;
   SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id);
   bool start();

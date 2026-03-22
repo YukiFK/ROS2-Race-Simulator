@@ -114,6 +114,16 @@ SingleVehicleRuntime & RaceCoordinator::primary_runtime()
   return requireRuntimes(runtimes_).front();
 }
 
+const SingleVehicleRuntime & RaceCoordinator::runtime_at(const std::size_t vehicle_index) const
+{
+  return requireRuntimes(runtimes_).at(vehicle_index);
+}
+
+SingleVehicleRuntime & RaceCoordinator::runtime_at(const std::size_t vehicle_index)
+{
+  return requireRuntimes(runtimes_).at(vehicle_index);
+}
+
 const SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::string & vehicle_id) const
 {
   return requireRuntimes(runtimes_)[findVehicleIndex(participating_vehicle_ids_, vehicle_id)];
