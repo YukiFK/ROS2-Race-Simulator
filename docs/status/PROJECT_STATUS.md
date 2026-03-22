@@ -35,6 +35,7 @@ current demo は **first multi-vehicle implementation slice** として、次が
   - validation
   - review checklist
   - milestone1
+  - `docs/design/race_state_completed_laps_current_semantics.md`
   - README 導線
 
 ### 現在の観測責務
@@ -81,6 +82,8 @@ current demo は **first multi-vehicle implementation slice** として、次が
 ### `RaceState.completed_laps`
 current implementation では、race-wide aggregate ではなく **primary vehicle snapshot 由来**。  
 race-wide completion の判断は `race_state status` を主に見て、vehicle-local finish は `VehicleRaceStatus.has_finished` を見る。
+
+詳細な読み方は `docs/design/race_state_completed_laps_current_semantics.md` を参照。
 
 これは未整理のまま残っている論点であり、**もっともらしく補完しない**こと。
 
