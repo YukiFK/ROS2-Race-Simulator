@@ -96,5 +96,34 @@ TEST(RaceCoordinatorTest, RejectsUnknownParticipatingVehicleIdLookup)
     static_cast<void>(coordinator.runtime_for_vehicle("missing_vehicle")), std::out_of_range);
 }
 
+TEST(RaceCoordinatorTest, AppliesGlobalCommandsToBothParticipatingRuntimes)
+{
+  RaceCoordinator coordinator(
+    makeTrack(), RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle"},
+    makeRuntimePositions(), 2);
+
+  SingleVehicleRuntime & alpha_runtime = coordinator.runtime_for_vehicle("alpha_vehicle");
+  SingleVehicleRuntime & beta_runtime = coordinator.runtime_for_vehicle("beta_vehicle");
+
+  EXPECT_FALSE(coordinator.start());
+  EXPECT_TRUE(alpha_runtime.running());
+  EXPECT_TRUE(beta_runtime.running());
+
+  static_cast<void>(alpha_runtime.tick());
+  static_cast<void>(beta_runtime.tick());
+  EXPECT_EQ(alpha_runtime.step_index(), 1U);
+  EXPECT_EQ(beta_runtime.step_index(), 1U);
+
+  EXPECT_TRUE(coordinator.stop());
+  EXPECT_FALSE(alpha_runtime.running());
+  EXPECT_FALSE(beta_runtime.running());
+
+  coordinator.reset();
+  EXPECT_FALSE(alpha_runtime.running());
+  EXPECT_FALSE(beta_runtime.running());
+  EXPECT_EQ(alpha_runtime.step_index(), 0U);
+  EXPECT_EQ(beta_runtime.step_index(), 0U);
+}
+
 }  // namespace
 }  // namespace race_track

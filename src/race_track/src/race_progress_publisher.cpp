@@ -155,7 +155,7 @@ private:
   {
     switch (msg->command) {
       case race_interfaces::msg::RaceCommand::START:
-        if (primary_runtime().start()) {
+        if (coordinator_.start()) {
           RCLCPP_INFO(
             get_logger(), "Received START after completion or final step, resetting progression first");
         }
@@ -163,12 +163,12 @@ private:
         RCLCPP_INFO(get_logger(), "Received START command, progression started");
         break;
       case race_interfaces::msg::RaceCommand::STOP:
-        primary_runtime().stop();
+        coordinator_.stop();
         publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
         RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
         break;
       case race_interfaces::msg::RaceCommand::RESET:
-        primary_runtime().reset();
+        coordinator_.reset();
         publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
         RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
         break;
