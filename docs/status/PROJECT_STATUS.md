@@ -106,7 +106,9 @@ race-wide completion の判断は `race_state status` を主に見て、vehicle-
 - なし
 
 次に着手する issue:
-- TBD
+- `RaceState.completed_laps` follow-up implementation planning
+  - `RaceState` の race-wide responsibility を広げず、vehicle-local lap progress の主利用を `VehicleRaceStatus` に寄せる
+  - 詳細は `docs/design/race_state_completed_laps_future_handling.md` を参照
 
 ---
 
