@@ -12,7 +12,6 @@
 #include "race_track/lap_event_assembler.hpp"
 #include "race_track/race_coordinator.hpp"
 #include "race_track/race_state_assembler.hpp"
-#include "race_track/single_vehicle_runtime.hpp"
 #include "race_track/track_loader.hpp"
 #include "race_track/track_validator.hpp"
 #include "race_track/vehicle_race_status_assembler.hpp"
@@ -58,17 +57,23 @@ std::filesystem::path resolveSampleTrackPath(const char * argv0)
   throw std::runtime_error("Failed to locate config/sample_track.yaml");
 }
 
+RaceCoordinator::VehicleRuntimePositions makePublisherRuntimePositions()
+{
+  return {{
+    {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
+     {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
+    {},
+  }};
+}
+
 class RaceProgressPublisher : public rclcpp::Node
 {
 public:
   explicit RaceProgressPublisher(const std::filesystem::path & sample_track_path)
   : Node("race_progress_publisher"),
-    coordinator_(loadTrackFromYaml(sample_track_path.string())),
     target_lap_count_(declare_parameter<std::int64_t>("target_lap_count", 2)),
-    runtime_(
-      coordinator_.track(),
-      {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
-       {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
+    coordinator_(
+      loadTrackFromYaml(sample_track_path.string()), makePublisherRuntimePositions(),
       target_lap_count_)
   {
     validateTrackOrThrow(coordinator_.track());
@@ -90,13 +95,23 @@ public:
     RCLCPP_INFO(get_logger(), "Race coordinator initialized for %zu participating vehicles",
       coordinator_.vehicle_count());
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
-    publishRaceState(runtime_.current_step_sec(), runtime_.snapshot());
+    publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
   }
 
 private:
+  const SingleVehicleRuntime & primary_runtime() const
+  {
+    return coordinator_.primary_runtime();
+  }
+
+  SingleVehicleRuntime & primary_runtime()
+  {
+    return coordinator_.primary_runtime();
+  }
+
   void onTimer()
   {
-    const SingleVehicleTickResult tick_result = runtime_.tick();
+    const SingleVehicleTickResult tick_result = primary_runtime().tick();
     if (!tick_result.advanced) {
       return;
     }
@@ -112,7 +127,8 @@ private:
       get_logger(),
       "step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
       "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
-      runtime_.step_index() - 1U, tick_result.current_position.x, tick_result.current_position.y,
+      primary_runtime().step_index() - 1U, tick_result.current_position.x,
+      tick_result.current_position.y,
       tick_result.progress_update.nearest_centerline_index,
       tick_result.progress_update.distance_to_centerline,
       tick_result.progress_update.is_off_track ? "true" : "false",
@@ -139,21 +155,21 @@ private:
   {
     switch (msg->command) {
       case race_interfaces::msg::RaceCommand::START:
-        if (runtime_.start()) {
+        if (primary_runtime().start()) {
           RCLCPP_INFO(
             get_logger(), "Received START after completion or final step, resetting progression first");
         }
-        publishRaceState(runtime_.current_step_sec(), runtime_.snapshot());
+        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
         RCLCPP_INFO(get_logger(), "Received START command, progression started");
         break;
       case race_interfaces::msg::RaceCommand::STOP:
-        runtime_.stop();
-        publishRaceState(runtime_.current_step_sec(), runtime_.snapshot());
+        primary_runtime().stop();
+        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
         RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
         break;
       case race_interfaces::msg::RaceCommand::RESET:
-        runtime_.reset();
-        publishRaceState(runtime_.current_step_sec(), runtime_.snapshot());
+        primary_runtime().reset();
+        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
         RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
         break;
       default:
@@ -172,7 +188,7 @@ private:
   void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
   {
     race_interfaces::msg::RaceState race_state =
-      race_state_assembler_.assemble(runtime_.current_race_status(), step_sec, snapshot);
+      race_state_assembler_.assemble(primary_runtime().current_race_status(), step_sec, snapshot);
     race_state_publisher_->publish(race_state);
   }
 
@@ -184,17 +200,16 @@ private:
         step_sec, coordinator_.participating_vehicle_ids().front(), progress_update));
   }
 
+  std::int64_t target_lap_count_{2};
   RaceCoordinator coordinator_;
   LapEventAssembler lap_event_assembler_;
   RaceStateAssembler race_state_assembler_;
   VehicleRaceStatusAssembler vehicle_race_status_assembler_;
-  SingleVehicleRuntime runtime_;
   rclcpp::Publisher<race_interfaces::msg::VehicleRaceStatus>::SharedPtr status_publisher_;
   rclcpp::Publisher<race_interfaces::msg::LapEvent>::SharedPtr lap_event_publisher_;
   rclcpp::Publisher<race_interfaces::msg::RaceState>::SharedPtr race_state_publisher_;
   rclcpp::Subscription<race_interfaces::msg::RaceCommand>::SharedPtr command_subscriber_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::int64_t target_lap_count_{2};
 };
 
 }  // namespace
