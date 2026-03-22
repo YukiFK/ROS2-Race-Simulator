@@ -1,5 +1,6 @@
 #include "race_track/race_coordinator.hpp"
 
+#include <stdexcept>
 #include <utility>
 
 namespace race_track
@@ -12,10 +13,55 @@ RaceCoordinator::ParticipatingVehicleIds makeDefaultParticipatingVehicleIds()
   return {"demo_vehicle_1", "demo_vehicle_2"};
 }
 
+RaceCoordinator::VehicleRuntimes makeVehicleRuntimes(
+  const TrackModel & track,
+  const RaceCoordinator::VehicleRuntimePositions & runtime_positions,
+  const std::int64_t target_lap_count)
+{
+  return {
+    SingleVehicleRuntime(track, runtime_positions[0], target_lap_count),
+    SingleVehicleRuntime(track, runtime_positions[1], target_lap_count),
+  };
+}
+
+std::size_t findVehicleIndex(
+  const RaceCoordinator::ParticipatingVehicleIds & participating_vehicle_ids,
+  const std::string & vehicle_id)
+{
+  for (std::size_t index = 0; index < participating_vehicle_ids.size(); ++index) {
+    if (participating_vehicle_ids[index] == vehicle_id) {
+      return index;
+    }
+  }
+
+  throw std::out_of_range("Unknown participating vehicle id: " + vehicle_id);
+}
+
+const RaceCoordinator::VehicleRuntimes & requireRuntimes(
+  const std::optional<RaceCoordinator::VehicleRuntimes> & runtimes)
+{
+  if (!runtimes.has_value()) {
+    throw std::logic_error("RaceCoordinator runtimes were not initialized");
+  }
+
+  return *runtimes;
+}
+
+RaceCoordinator::VehicleRuntimes & requireRuntimes(
+  std::optional<RaceCoordinator::VehicleRuntimes> & runtimes)
+{
+  if (!runtimes.has_value()) {
+    throw std::logic_error("RaceCoordinator runtimes were not initialized");
+  }
+
+  return *runtimes;
+}
+
 }  // namespace
 
 RaceCoordinator::RaceCoordinator(TrackModel track)
-: RaceCoordinator(std::move(track), makeDefaultParticipatingVehicleIds())
+: track_(std::move(track)),
+  participating_vehicle_ids_(makeDefaultParticipatingVehicleIds())
 {
 }
 
@@ -23,6 +69,23 @@ RaceCoordinator::RaceCoordinator(
   TrackModel track, ParticipatingVehicleIds participating_vehicle_ids)
 : track_(std::move(track)),
   participating_vehicle_ids_(std::move(participating_vehicle_ids))
+{
+}
+
+RaceCoordinator::RaceCoordinator(
+  TrackModel track, VehicleRuntimePositions runtime_positions, const std::int64_t target_lap_count)
+: RaceCoordinator(
+    std::move(track), makeDefaultParticipatingVehicleIds(), std::move(runtime_positions),
+    target_lap_count)
+{
+}
+
+RaceCoordinator::RaceCoordinator(
+  TrackModel track, ParticipatingVehicleIds participating_vehicle_ids,
+  VehicleRuntimePositions runtime_positions, const std::int64_t target_lap_count)
+: track_(std::move(track)),
+  participating_vehicle_ids_(std::move(participating_vehicle_ids)),
+  runtimes_(makeVehicleRuntimes(track_, runtime_positions, target_lap_count))
 {
 }
 
@@ -39,6 +102,26 @@ std::size_t RaceCoordinator::vehicle_count() const
 const TrackModel & RaceCoordinator::track() const
 {
   return track_;
+}
+
+const SingleVehicleRuntime & RaceCoordinator::primary_runtime() const
+{
+  return requireRuntimes(runtimes_).front();
+}
+
+SingleVehicleRuntime & RaceCoordinator::primary_runtime()
+{
+  return requireRuntimes(runtimes_).front();
+}
+
+const SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::string & vehicle_id) const
+{
+  return requireRuntimes(runtimes_)[findVehicleIndex(participating_vehicle_ids_, vehicle_id)];
+}
+
+SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::string & vehicle_id)
+{
+  return requireRuntimes(runtimes_)[findVehicleIndex(participating_vehicle_ids_, vehicle_id)];
 }
 
 }  // namespace race_track
