@@ -124,4 +124,29 @@ SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::string & 
   return requireRuntimes(runtimes_)[findVehicleIndex(participating_vehicle_ids_, vehicle_id)];
 }
 
+bool RaceCoordinator::start()
+{
+  bool reset_performed = false;
+  for (auto & runtime : requireRuntimes(runtimes_)) {
+    reset_performed = runtime.start() || reset_performed;
+  }
+  return reset_performed;
+}
+
+bool RaceCoordinator::stop()
+{
+  bool was_running = false;
+  for (auto & runtime : requireRuntimes(runtimes_)) {
+    was_running = runtime.stop() || was_running;
+  }
+  return was_running;
+}
+
+void RaceCoordinator::reset()
+{
+  for (auto & runtime : requireRuntimes(runtimes_)) {
+    runtime.reset();
+  }
+}
+
 }  // namespace race_track

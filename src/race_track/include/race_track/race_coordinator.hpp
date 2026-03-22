@@ -37,6 +37,9 @@ public:
   SingleVehicleRuntime & primary_runtime();
   const SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id) const;
   SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id);
+  bool start();
+  bool stop();
+  void reset();
 
 private:
   TrackModel track_;
