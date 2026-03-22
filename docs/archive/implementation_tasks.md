@@ -159,10 +159,10 @@ race_simulator_ws/
 #### 作業内容
 以下の文書を配置する。
 
-- `docs/requirements.md`
-- `docs/specification.md`
-- `docs/architecture.md`
-- `docs/implementation_tasks.md`
+- `docs/specs/requirements.md`
+- `docs/specs/specification.md`
+- `docs/design/architecture.md`
+- `docs/archive/implementation_tasks.md`
 
 #### 完了条件
 - docs ディレクトリに文書が存在する
@@ -1598,4 +1598,3 @@ controller 比較を拡張する。
 - review 時の作業単位確認
 
 本書により、仕様と実装の間を埋めることを目的とする。
-
