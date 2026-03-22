@@ -62,7 +62,8 @@ RaceCoordinator::VehicleRuntimePositions makePublisherRuntimePositions()
   return {{
     {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
      {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
-    {},
+    {{-2.0, 0.5}, {-0.5, 0.7}, {1.0, 0.7}, {6.0, 0.6}, {11.0, 0.9}, {18.0, 5.3},
+     {9.0, 5.5}, {0.5, 0.5}, {-1.0, 0.5}, {1.5, 0.4}, {4.0, 4.5}},
   }};
 }
 
@@ -95,7 +96,7 @@ public:
     RCLCPP_INFO(get_logger(), "Race coordinator initialized for %zu participating vehicles",
       coordinator_.vehicle_count());
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
-    publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
+    publishRaceState();
   }
 
 private:
@@ -104,50 +105,62 @@ private:
     return coordinator_.primary_runtime();
   }
 
-  SingleVehicleRuntime & primary_runtime()
+  SingleVehicleRuntime & runtimeAt(const std::size_t vehicle_index)
   {
-    return coordinator_.primary_runtime();
+    return coordinator_.runtime_at(vehicle_index);
   }
 
   void onTimer()
   {
-    const SingleVehicleTickResult tick_result = primary_runtime().tick();
-    if (!tick_result.advanced) {
-      return;
-    }
+    bool any_runtime_advanced = false;
 
-    if (tick_result.crossing_detected) {
-      publishLapEvent(tick_result.step_sec, tick_result.progress_update);
-    }
+    for (std::size_t vehicle_index = 0; vehicle_index < coordinator_.vehicle_count(); ++vehicle_index) {
+      SingleVehicleRuntime & runtime = runtimeAt(vehicle_index);
+      const std::string & vehicle_id = coordinator_.participating_vehicle_ids()[vehicle_index];
+      const SingleVehicleTickResult tick_result = runtime.tick();
+      if (!tick_result.advanced) {
+        continue;
+      }
 
-    publishVehicleRaceStatus(tick_result.step_sec, tick_result.progress_update);
-    publishRaceState(tick_result.step_sec, tick_result.progress_update.snapshot);
+      any_runtime_advanced = true;
 
-    RCLCPP_INFO(
-      get_logger(),
-      "step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
-      "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
-      primary_runtime().step_index() - 1U, tick_result.current_position.x,
-      tick_result.current_position.y,
-      tick_result.progress_update.nearest_centerline_index,
-      tick_result.progress_update.distance_to_centerline,
-      tick_result.progress_update.is_off_track ? "true" : "false",
-      tick_result.progress_update.crossing_detected ? "true" : "false",
-      tick_result.progress_update.snapshot.lap_count,
-      tick_result.progress_update.snapshot.off_track_count);
+      if (tick_result.crossing_detected) {
+        publishLapEvent(vehicle_id, tick_result.step_sec, tick_result.progress_update);
+      }
 
-    if (tick_result.just_completed) {
+      publishVehicleRaceStatus(vehicle_id, tick_result.step_sec, tick_result.progress_update);
+
       RCLCPP_INFO(
-        get_logger(), "Target lap count reached (%d/%ld), marking race completed",
-        tick_result.progress_update.snapshot.lap_count, target_lap_count_);
-      return;
+        get_logger(),
+        "vehicle_id=%s step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
+        "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
+        vehicle_id.c_str(), runtime.step_index() - 1U, tick_result.current_position.x,
+        tick_result.current_position.y,
+        tick_result.progress_update.nearest_centerline_index,
+        tick_result.progress_update.distance_to_centerline,
+        tick_result.progress_update.is_off_track ? "true" : "false",
+        tick_result.progress_update.crossing_detected ? "true" : "false",
+        tick_result.progress_update.snapshot.lap_count,
+        tick_result.progress_update.snapshot.off_track_count);
+
+      if (tick_result.just_completed) {
+        RCLCPP_INFO(
+          get_logger(), "vehicle_id=%s target lap count reached (%d/%ld), marking runtime completed",
+          vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
+        continue;
+      }
+
+      if (tick_result.stopped_without_completion) {
+        RCLCPP_WARN(
+          get_logger(),
+          "vehicle_id=%s progression stopped at end of fixed positions before reaching target laps "
+          "(%d/%ld)",
+          vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
+      }
     }
 
-    if (tick_result.stopped_without_completion) {
-      RCLCPP_WARN(
-        get_logger(),
-        "Progression stopped at end of fixed positions before reaching target laps (%d/%ld)",
-        tick_result.progress_update.snapshot.lap_count, target_lap_count_);
+    if (any_runtime_advanced) {
+      publishRaceState();
     }
   }
 
@@ -159,17 +172,17 @@ private:
           RCLCPP_INFO(
             get_logger(), "Received START after completion or final step, resetting progression first");
         }
-        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
+        publishRaceState();
         RCLCPP_INFO(get_logger(), "Received START command, progression started");
         break;
       case race_interfaces::msg::RaceCommand::STOP:
         coordinator_.stop();
-        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
+        publishRaceState();
         RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
         break;
       case race_interfaces::msg::RaceCommand::RESET:
         coordinator_.reset();
-        publishRaceState(primary_runtime().current_step_sec(), primary_runtime().snapshot());
+        publishRaceState();
         RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
         break;
       default:
@@ -178,26 +191,27 @@ private:
     }
   }
 
-  void publishLapEvent(const std::int32_t step_sec, const ProgressUpdate & progress_update)
+  void publishLapEvent(
+    const std::string & vehicle_id, const std::int32_t step_sec,
+    const ProgressUpdate & progress_update)
   {
-    lap_event_publisher_->publish(
-      lap_event_assembler_.assemble(
-        step_sec, coordinator_.participating_vehicle_ids().front(), progress_update));
+    lap_event_publisher_->publish(lap_event_assembler_.assemble(step_sec, vehicle_id, progress_update));
   }
 
-  void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
+  void publishRaceState()
   {
-    race_interfaces::msg::RaceState race_state =
-      race_state_assembler_.assemble(primary_runtime().current_race_status(), step_sec, snapshot);
+    const SingleVehicleRuntime & runtime = primary_runtime();
+    race_interfaces::msg::RaceState race_state = race_state_assembler_.assemble(
+      runtime.current_race_status(), runtime.current_step_sec(), runtime.snapshot());
     race_state_publisher_->publish(race_state);
   }
 
   void publishVehicleRaceStatus(
-    const std::int32_t step_sec, const ProgressUpdate & progress_update)
+    const std::string & vehicle_id, const std::int32_t step_sec,
+    const ProgressUpdate & progress_update)
   {
     status_publisher_->publish(
-      vehicle_race_status_assembler_.assemble(
-        step_sec, coordinator_.participating_vehicle_ids().front(), progress_update));
+      vehicle_race_status_assembler_.assemble(step_sec, vehicle_id, progress_update));
   }
 
   std::int64_t target_lap_count_{2};
