@@ -32,6 +32,14 @@ RaceCoordinator::VehicleRuntimePositions makeRuntimePositions()
   }};
 }
 
+RaceCoordinator::VehicleRuntimePositions makeStaggeredRuntimePositions()
+{
+  return {{
+    {{-1.0, 0.0}, {1.0, 0.0}, {5.0, 0.0}},
+    {{-1.0, 0.5}, {-0.5, 0.5}, {-0.2, 0.5}, {1.0, 0.5}, {5.0, 0.5}},
+  }};
+}
+
 TEST(RaceCoordinatorTest, ExposesDefaultParticipatingVehicleIdsAndCount)
 {
   RaceCoordinator coordinator(makeTrack());
@@ -126,6 +134,39 @@ TEST(RaceCoordinatorTest, AppliesGlobalCommandsToBothParticipatingRuntimes)
   EXPECT_FALSE(beta_runtime.running());
   EXPECT_EQ(alpha_runtime.step_index(), 0U);
   EXPECT_EQ(beta_runtime.step_index(), 0U);
+}
+
+TEST(RaceCoordinatorTest, RequiresAllParticipatingVehiclesToFinishForRaceCompletion)
+{
+  RaceCoordinator coordinator(
+    makeTrack(), RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle"},
+    makeStaggeredRuntimePositions(), 1);
+
+  EXPECT_FALSE(coordinator.all_participating_vehicles_finished());
+  EXPECT_EQ(coordinator.current_race_status(), "stopped");
+
+  static_cast<void>(coordinator.start());
+  EXPECT_EQ(coordinator.current_race_status(), "running");
+
+  static_cast<void>(coordinator.runtime_for_vehicle("alpha_vehicle").tick());
+  static_cast<void>(coordinator.runtime_for_vehicle("beta_vehicle").tick());
+  EXPECT_FALSE(coordinator.all_participating_vehicles_finished());
+  EXPECT_EQ(coordinator.current_race_status(), "running");
+
+  static_cast<void>(coordinator.runtime_for_vehicle("alpha_vehicle").tick());
+  static_cast<void>(coordinator.runtime_for_vehicle("beta_vehicle").tick());
+  EXPECT_FALSE(coordinator.runtime_for_vehicle("alpha_vehicle").running());
+  EXPECT_TRUE(coordinator.runtime_for_vehicle("alpha_vehicle").snapshot().has_finished);
+  EXPECT_FALSE(coordinator.all_participating_vehicles_finished());
+  EXPECT_EQ(coordinator.current_race_status(), "running");
+
+  static_cast<void>(coordinator.runtime_for_vehicle("beta_vehicle").tick());
+  EXPECT_FALSE(coordinator.all_participating_vehicles_finished());
+  EXPECT_EQ(coordinator.current_race_status(), "running");
+
+  static_cast<void>(coordinator.runtime_for_vehicle("beta_vehicle").tick());
+  EXPECT_TRUE(coordinator.all_participating_vehicles_finished());
+  EXPECT_EQ(coordinator.current_race_status(), "completed");
 }
 
 }  // namespace

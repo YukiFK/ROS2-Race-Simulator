@@ -39,6 +39,10 @@ public:
   SingleVehicleRuntime & runtime_at(std::size_t vehicle_index);
   const SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id) const;
   SingleVehicleRuntime & runtime_for_vehicle(const std::string & vehicle_id);
+  bool all_participating_vehicles_finished() const;
+  std::string current_race_status() const;
+  std::int32_t current_step_sec() const;
+  ProgressSnapshot primary_snapshot() const;
   bool start();
   bool stop();
   void reset();

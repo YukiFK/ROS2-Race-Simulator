@@ -100,11 +100,6 @@ public:
   }
 
 private:
-  const SingleVehicleRuntime & primary_runtime() const
-  {
-    return coordinator_.primary_runtime();
-  }
-
   SingleVehicleRuntime & runtimeAt(const std::size_t vehicle_index)
   {
     return coordinator_.runtime_at(vehicle_index);
@@ -200,9 +195,9 @@ private:
 
   void publishRaceState()
   {
-    const SingleVehicleRuntime & runtime = primary_runtime();
     race_interfaces::msg::RaceState race_state = race_state_assembler_.assemble(
-      runtime.current_race_status(), runtime.current_step_sec(), runtime.snapshot());
+      coordinator_.current_race_status(), coordinator_.current_step_sec(),
+      coordinator_.primary_snapshot());
     race_state_publisher_->publish(race_state);
   }
 
