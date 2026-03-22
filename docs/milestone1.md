@@ -211,6 +211,16 @@ colcon test-result --verbose
 - `race_progress_monitor`: `/race_state`、`/vehicle_race_status`、`/lap_event` を subscribe して画面に表示する
 - `race_command_cli`: `start` / `stop` / `reset` を `/race_command` に publish する
 
+current demo は first multi-vehicle implementation slice として、`demo_vehicle_1` と `demo_vehicle_2` の 2 台固定 participating vehicles を前提にしています。
+
+観測責務は次のように分かれています。
+
+- `RaceState`: race-wide state の観測手段
+- `VehicleRaceStatus`: vehicle-local progress の主な観測手段
+- `LapEvent`: vehicle-local な lap crossing event の観測手段
+
+race-wide `completed` は first slice では `all participating vehicles finished` として扱います。したがって、片方の車両だけが `has_finished=true` になっても race-wide `completed` にはなりません。
+
 ### Build
 
 ワークスペース直下で実行します。
@@ -231,7 +241,13 @@ source install/setup.bash
 ros2 launch race_track race_progress_demo.launch.py
 ```
 
-この launch は `race_progress_publisher` に `target_lap_count:=2` を渡します。単一車両デモでは、この値に到達した時点で race completion を判定します。
+この launch は `race_progress_publisher` に `target_lap_count:=2` を渡します。
+
+起動直後の期待:
+
+- publisher 側に `Target lap count: 2`
+- publisher 側に `Race coordinator initialized for 2 participating vehicles`
+- monitor 側に `race_state status=stopped`
 
 ### Command CLI
 
@@ -262,89 +278,28 @@ ros2 run race_track race_command_cli reset
 
 ### Expected Behavior
 
-- launch 直後、monitor に `race_state status=stopped` が表示される
-- `start` 実行後、monitor に `race_state status=running` と `vehicle_race_status` が継続して表示される
-- スタートライン通過時に `lap_event` が表示される
-- `lap_count` が `target_lap_count` に到達した時点で、`vehicle_race_status.has_finished=true` と `race_state status=completed` が揃う
-- `target_lap_count` 未達のまま固定 position 列の終端に到達した場合、publisher は warning を出して停止し、publish される `race_state status=stopped` のまま `completed` には遷移しない
-- `stop` 実行後、monitor に `race_state status=stopped` が表示されて進行が止まる
-- `reset` 実行後、経過時間とラップ数が初期状態に戻り、monitor に `race_state status=stopped` が表示される
+`start` 後の最小観測:
 
-### Current State Semantics in the Single-Vehicle Demo
+- `race_state status=running`
+- `vehicle_race_status vehicle_id=demo_vehicle_1 ...`
+- `vehicle_race_status vehicle_id=demo_vehicle_2 ...`
+- `lap_event vehicle_id=demo_vehicle_1 ...`
+- `lap_event vehicle_id=demo_vehicle_2 ...`
 
-この節は、現在の最小デモ実装に限った意味を整理したものです。将来の本格的な race manager や multi-vehicle 前提の仕様は、ここでは確定しません。
+completion の最小観測:
 
-前提:
+- 片方だけ `lap_count=2` に達した時点では、その車両の `has_finished=true` を観測できても `race_state status=running` のまま
+- 両方の participating vehicles が `lap_count=2` に達した後にだけ `race_state status=completed` になる
 
-- 車両は 1 台のみで、`vehicle_id` は固定の `demo_vehicle_1`
-- `race_progress_publisher` は内部の固定 position 列を 1 秒ごとに順番に消費して進行する
-- `race_progress_publisher` は `target_lap_count` パラメータを持ち、デフォルト値は `2`
-- `lap_count` は forward 方向の start line crossing を検出したときだけ増える
-- `completed` / `has_finished` は `lap_count >= target_lap_count` になったときに立つ
-- 固定 position 列の最終 step 到達だけでは `completed` にならない
+`stop` / `reset` の最小観測:
 
-状態とフィールドの意味:
+- `stop` は 2 台の progression を race-wide に止める
+- `reset` は 2 台の lap progress と finish 状態を初期化し、`race_state status=stopped` に戻す
 
-### race-level state と vehicle-level state の責務境界
+実装上の補足:
 
-この節は current single-vehicle demo の実装に限った整理です。将来の multi-vehicle race や race manager の正式仕様をここで確定するものではありません。
-
-| 要素 | current single-vehicle demo での責務 |
-| --- | --- |
-| `RaceState` | race-level の実行状態を表す。主に publisher 全体が `stopped` / `running` / `completed` のどこにいるかを伝えるための state であり、車両 progress の主情報源ではない。 |
-| `VehicleRaceStatus` | 車両単位の progress を表す主情報源。`lap_count`、lap time 群、`has_finished` はこの message を基準に読む。 |
-| `LapEvent` | start line crossing が確定した瞬間のイベント通知。常時の最新状態を保持する用途ではなく、lap 完了時の 1 回分の event として使う。 |
-
-### current single-vehicle demo での各フィールドの意味
-
-| Field | 現在の単一車両デモでの意味 |
-| --- | --- |
-| `RaceState.race_status = stopped` | publisher が進行していない状態。初期状態、`stop` 後、`reset` 後がこれに当たる。 |
-| `RaceState.race_status = running` | publisher が固定 position 列を順に消費中の状態。 |
-| `RaceState.race_status = completed` | `VehicleRaceStatus.lap_count >= target_lap_count` が成立し、publisher が進行を停止した状態。 |
-| `VehicleRaceStatus.lap_count` | その車両について、forward 方向の start line crossing が確定した回数。現在の実装では `ProgressTracker` が crossing ごとに `1` ずつ加算する。 |
-| `VehicleRaceStatus.has_finished` | その車両が current single-vehicle demo の target lap に到達したことを表すフラグ。`lap_count >= target_lap_count` で `true` になり、`reset` で `false` に戻る。 |
-| `LapEvent.lap_count` | crossing 検出後の確定 lap 数を、その event 時点の値として載せたもの。 |
-| `LapEvent.has_finished` | publish 時点の snapshot をそのまま載せるため、target lap に到達した crossing では `true` になる。 |
-
-### `RaceState.completed_laps` の整理
-
-現在の意味:
-
-- `RaceState.completed_laps` は、current single-vehicle demo では publish 時点の車両 1 台分の確定 `lap_count` を `RaceState` 側にも載せた値。
-- 実質的には、その時点の `VehicleRaceStatus.lap_count` と同じ進捗値を race-level message に重ねている。
-- progress を読む主情報源は引き続き `VehicleRaceStatus` であり、`RaceState.completed_laps` は補助的な重複値として扱う。
-
-誤用してはいけない意味:
-
-- `target_lap_count` のような目標周回数を表す値として解釈してはいけない。
-- race 全体で走るべき total race laps を表す設定値として解釈してはいけない。
-- multi-vehicle 時の全車 aggregate lap 数を表す値として解釈してはいけない。
-- 将来の順位判定や全体完了判定に使う正式な race-wide progress 指標だとみなしてはいけない。
-
-補足:
-
-- target 未達のまま固定 position 列が尽きた場合、publisher は停止するが `VehicleRaceStatus.has_finished` は `false` のまま。
-- このとき `RaceState.completed_laps` も「その時点までに確定した lap 数」を保持するだけで、未達である事実を補完する意味は持たない。
-
-将来の見直し候補:
-
-- `RaceState.completed_laps` は、単一車両の progress 複製値であることを明確にするための rename 後の名前。
-- race-level state と vehicle-level progress を明確に分けるため、将来は field を split して race state から lap progress を外す余地がある。
-- multi-vehicle 化や race manager 導入時は、target laps、race-wide aggregate、vehicle-local lap count を別々の表現に分離する再設計が必要になる可能性がある。
-- ただし、どの名前や message 構成にするかは現時点では未確定であり、この文書では確定しない。
-
-現時点で未確定なこと:
-
-- `VehicleRaceStatus.has_finished` を将来の正式な race finish semantics にどう結び付けるか
-- `race_status=completed` の遷移条件を lap 数、順位、全車完了などのどの条件で定義するか
-- multi-vehicle 対応時に、race-level state と vehicle-level progress をどの message 境界で分離するか
-
-将来の拡張で再整理が必要な点:
-
-- 現在は `target_lap_count` を publisher parameter として持つだけなので、multi-vehicle 化や race manager 導入時は設定の置き場を再整理する必要がある
-- finish 条件を高度化する場合、`has_finished` は「デモ終了フラグ」ではなく「レース完了判定」との関係を改めて定義する必要がある
-- multi-vehicle 対応時は、全体 state と各車 state の責務分離を明確にし直す必要がある
+- current implementation の `RaceState.completed_laps` は race-wide 集約値ではなく primary vehicle snapshot 由来
+- race-wide completion の確認は `race_state status` を主に見て、vehicle-local completion の確認は `VehicleRaceStatus.has_finished` を見る
 
 ## 関連ファイル / ディレクトリ案内
 
