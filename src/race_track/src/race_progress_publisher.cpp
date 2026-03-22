@@ -10,6 +10,7 @@
 #include "race_interfaces/msg/race_state.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
 #include "race_track/lap_event_assembler.hpp"
+#include "race_track/race_coordinator.hpp"
 #include "race_track/race_state_assembler.hpp"
 #include "race_track/single_vehicle_runtime.hpp"
 #include "race_track/track_loader.hpp"
@@ -22,7 +23,6 @@ namespace race_track
 namespace
 {
 
-constexpr char kVehicleId[] = "demo_vehicle_1";
 std::filesystem::path getExecutableDir(const char * argv0)
 {
   if (argv0 == nullptr) {
@@ -63,15 +63,15 @@ class RaceProgressPublisher : public rclcpp::Node
 public:
   explicit RaceProgressPublisher(const std::filesystem::path & sample_track_path)
   : Node("race_progress_publisher"),
-    track_(loadTrackFromYaml(sample_track_path.string())),
+    coordinator_(loadTrackFromYaml(sample_track_path.string())),
     target_lap_count_(declare_parameter<std::int64_t>("target_lap_count", 2)),
     runtime_(
-      track_,
+      coordinator_.track(),
       {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
        {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
       target_lap_count_)
   {
-    validateTrackOrThrow(track_);
+    validateTrackOrThrow(coordinator_.track());
 
     status_publisher_ =
       create_publisher<race_interfaces::msg::VehicleRaceStatus>("/vehicle_race_status", 10);
@@ -84,9 +84,11 @@ public:
       std::chrono::seconds(1), std::bind(&RaceProgressPublisher::onTimer, this));
 
     RCLCPP_INFO(
-      get_logger(), "Loaded track '%s' from %s", track_.track_name.c_str(),
+      get_logger(), "Loaded track '%s' from %s", coordinator_.track().track_name.c_str(),
       sample_track_path.c_str());
     RCLCPP_INFO(get_logger(), "Target lap count: %ld", target_lap_count_);
+    RCLCPP_INFO(get_logger(), "Race coordinator initialized for %zu participating vehicles",
+      coordinator_.vehicle_count());
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
     publishRaceState(runtime_.current_step_sec(), runtime_.snapshot());
   }
@@ -163,7 +165,8 @@ private:
   void publishLapEvent(const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
     lap_event_publisher_->publish(
-      lap_event_assembler_.assemble(step_sec, kVehicleId, progress_update));
+      lap_event_assembler_.assemble(
+        step_sec, coordinator_.participating_vehicle_ids().front(), progress_update));
   }
 
   void publishRaceState(const std::int32_t step_sec, const ProgressSnapshot & snapshot)
@@ -177,10 +180,11 @@ private:
     const std::int32_t step_sec, const ProgressUpdate & progress_update)
   {
     status_publisher_->publish(
-      vehicle_race_status_assembler_.assemble(step_sec, kVehicleId, progress_update));
+      vehicle_race_status_assembler_.assemble(
+        step_sec, coordinator_.participating_vehicle_ids().front(), progress_update));
   }
 
-  TrackModel track_;
+  RaceCoordinator coordinator_;
   LapEventAssembler lap_event_assembler_;
   RaceStateAssembler race_state_assembler_;
   VehicleRaceStatusAssembler vehicle_race_status_assembler_;
