@@ -99,6 +99,7 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_index_cpp REQUIRED)
 
   ament_add_gtest(test_track_loader
     test/test_track_loader.cpp
@@ -149,6 +150,12 @@ if(BUILD_TESTING)
     test/test_race_coordinator.cpp
   )
   target_link_libraries(test_race_coordinator ${PROJECT_NAME})
+
+  ament_add_gtest(test_race_progress_integration
+    test/test_race_progress_integration.cpp
+  )
+  target_link_libraries(test_race_progress_integration ${PROJECT_NAME})
+  ament_target_dependencies(test_race_progress_integration rclcpp race_interfaces ament_index_cpp)
 endif()
 
 ament_export_include_directories(include)
