@@ -1,5 +1,6 @@
 #include "race_track/race_coordinator.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -132,6 +133,48 @@ const SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::str
 SingleVehicleRuntime & RaceCoordinator::runtime_for_vehicle(const std::string & vehicle_id)
 {
   return requireRuntimes(runtimes_)[findVehicleIndex(participating_vehicle_ids_, vehicle_id)];
+}
+
+bool RaceCoordinator::all_participating_vehicles_finished() const
+{
+  const VehicleRuntimes & runtimes = requireRuntimes(runtimes_);
+  for (const auto & runtime : runtimes) {
+    if (!runtime.snapshot().has_finished) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string RaceCoordinator::current_race_status() const
+{
+  if (all_participating_vehicles_finished()) {
+    return "completed";
+  }
+
+  const VehicleRuntimes & runtimes = requireRuntimes(runtimes_);
+  for (const auto & runtime : runtimes) {
+    if (runtime.running()) {
+      return "running";
+    }
+  }
+
+  return "stopped";
+}
+
+std::int32_t RaceCoordinator::current_step_sec() const
+{
+  const VehicleRuntimes & runtimes = requireRuntimes(runtimes_);
+  std::int32_t step_sec = 0;
+  for (const auto & runtime : runtimes) {
+    step_sec = std::max(step_sec, runtime.current_step_sec());
+  }
+  return step_sec;
+}
+
+ProgressSnapshot RaceCoordinator::primary_snapshot() const
+{
+  return primary_runtime().snapshot();
 }
 
 bool RaceCoordinator::start()
