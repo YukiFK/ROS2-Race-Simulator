@@ -39,14 +39,14 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "Monitoring /race_state, /vehicle_race_status, and /lap_event");
+      "Monitoring /race_state (race-wide), /vehicle_race_status (vehicle-local), and /lap_event");
   }
 
 private:
   void onRaceState(const race_interfaces::msg::RaceState::SharedPtr msg) const
   {
     RCLCPP_INFO(
-      get_logger(), "race_state status=%s elapsed=%s completed_laps=%d",
+      get_logger(), "race_state status=%s elapsed=%s completed_laps_snapshot=%d",
       msg->race_status.c_str(), formatDuration(msg->elapsed_time).c_str(), msg->completed_laps);
   }
 
@@ -55,9 +55,10 @@ private:
   {
     RCLCPP_INFO(
       get_logger(),
-      "vehicle_race_status vehicle_id=%s lap_count=%d current_lap_time=%s is_off_track=%s "
-      "off_track_count=%d",
-      msg->vehicle_id.c_str(), msg->lap_count, formatDuration(msg->current_lap_time).c_str(),
+      "vehicle_race_status vehicle_id=%s lap_count=%d has_finished=%s current_lap_time=%s "
+      "is_off_track=%s off_track_count=%d",
+      msg->vehicle_id.c_str(), msg->lap_count, msg->has_finished ? "true" : "false",
+      formatDuration(msg->current_lap_time).c_str(),
       msg->is_off_track ? "true" : "false", msg->off_track_count);
   }
 

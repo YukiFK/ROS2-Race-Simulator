@@ -29,6 +29,8 @@ race_interfaces::msg::RaceState RaceStateAssembler::assemble(
   race_state.header.frame_id = kFrameId;
   race_state.race_status = race_status;
   race_state.elapsed_time = makeDuration(step_sec);
+  // Keep the current first-slice semantics: this remains a primary snapshot copy, not a race-wide
+  // aggregate progress value.
   race_state.completed_laps = snapshot.lap_count;
   return race_state;
 }

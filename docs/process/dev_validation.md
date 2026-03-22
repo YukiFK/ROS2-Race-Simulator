@@ -68,7 +68,7 @@ ros2 launch race_track race_progress_demo.launch.py
 - publisher 側に `Target lap count: 2`
 - publisher 側に `Race coordinator initialized for 2 participating vehicles`
 - publisher 側に `Waiting for race commands on /race_command`
-- monitor 側に `Monitoring /race_state, /vehicle_race_status, and /lap_event`
+- monitor 側に `Monitoring /race_state (race-wide), /vehicle_race_status (vehicle-local), and /lap_event`
 - monitor 側に `race_state status=stopped`
 
 ### 2. Start
