@@ -11,6 +11,7 @@ add_library(${PROJECT_NAME}
   src/geometry.cpp
   src/lap_event_assembler.cpp
   src/progress_tracker.cpp
+  src/race_coordinator.cpp
   src/race_state_assembler.cpp
   src/single_vehicle_runtime.cpp
   src/track_loader.cpp
@@ -143,6 +144,11 @@ if(BUILD_TESTING)
     test/test_single_vehicle_runtime.cpp
   )
   target_link_libraries(test_single_vehicle_runtime ${PROJECT_NAME})
+
+  ament_add_gtest(test_race_coordinator
+    test/test_race_coordinator.cpp
+  )
+  target_link_libraries(test_race_coordinator ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
