@@ -177,6 +177,15 @@ ProgressSnapshot RaceCoordinator::primary_snapshot() const
   return primary_runtime().snapshot();
 }
 
+RaceCoordinator::RaceStateSource RaceCoordinator::current_race_state_source() const
+{
+  return RaceStateSource{
+    current_race_status(),
+    current_step_sec(),
+    primary_snapshot(),
+  };
+}
+
 bool RaceCoordinator::start()
 {
   bool reset_performed = false;

@@ -169,5 +169,26 @@ TEST(RaceCoordinatorTest, RequiresAllParticipatingVehiclesToFinishForRaceComplet
   EXPECT_EQ(coordinator.current_race_status(), "completed");
 }
 
+TEST(RaceCoordinatorTest, ExposesRaceWideStateSourceWithoutOwningRosPublish)
+{
+  RaceCoordinator coordinator(
+    makeTrack(), RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle"},
+    makeStaggeredRuntimePositions(), 1);
+
+  RaceCoordinator::RaceStateSource initial_state = coordinator.current_race_state_source();
+  EXPECT_EQ(initial_state.race_status, "stopped");
+  EXPECT_EQ(initial_state.step_sec, 0);
+  EXPECT_EQ(initial_state.primary_snapshot.lap_count, 0);
+
+  static_cast<void>(coordinator.start());
+  static_cast<void>(coordinator.runtime_for_vehicle("alpha_vehicle").tick());
+
+  RaceCoordinator::RaceStateSource running_state = coordinator.current_race_state_source();
+  EXPECT_EQ(running_state.race_status, "running");
+  EXPECT_EQ(running_state.step_sec, coordinator.current_step_sec());
+  EXPECT_EQ(running_state.primary_snapshot.lap_count, coordinator.primary_snapshot().lap_count);
+  EXPECT_FALSE(running_state.primary_snapshot.has_finished);
+}
+
 }  // namespace
 }  // namespace race_track

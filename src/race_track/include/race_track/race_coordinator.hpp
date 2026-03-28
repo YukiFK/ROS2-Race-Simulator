@@ -18,6 +18,13 @@ namespace race_track
 class RaceCoordinator
 {
 public:
+  struct RaceStateSource
+  {
+    std::string race_status;
+    std::int32_t step_sec{0};
+    ProgressSnapshot primary_snapshot{};
+  };
+
   using ParticipatingVehicleIds = std::array<std::string, 2>;
   using VehicleRuntimePositions = std::array<std::vector<Point2d>, 2>;
   using VehicleRuntimes = std::array<SingleVehicleRuntime, 2>;
@@ -43,6 +50,7 @@ public:
   std::string current_race_status() const;
   std::int32_t current_step_sec() const;
   ProgressSnapshot primary_snapshot() const;
+  RaceStateSource current_race_state_source() const;
   bool start();
   bool stop();
   void reset();
