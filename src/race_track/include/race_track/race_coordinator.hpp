@@ -1,7 +1,6 @@
 #ifndef RACE_TRACK__RACE_COORDINATOR_HPP_
 #define RACE_TRACK__RACE_COORDINATOR_HPP_
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -25,11 +24,12 @@ public:
     ProgressSnapshot primary_snapshot{};
   };
 
-  using ParticipatingVehicleIds = std::array<std::string, 2>;
-  using VehicleRuntimePositions = std::array<std::vector<Point2d>, 2>;
-  using VehicleRuntimes = std::array<SingleVehicleRuntime, 2>;
+  using ParticipatingVehicleIds = std::vector<std::string>;
+  using VehicleRuntimePositions = std::vector<std::vector<Point2d>>;
+  using VehicleRuntimes = std::vector<SingleVehicleRuntime>;
 
   explicit RaceCoordinator(TrackModel track);
+  // Without runtime_positions, this constructor remains limited to the current fixed 2-vehicle demo.
   RaceCoordinator(TrackModel track, ParticipatingVehicleIds participating_vehicle_ids);
   RaceCoordinator(
     TrackModel track, VehicleRuntimePositions runtime_positions, std::int64_t target_lap_count);

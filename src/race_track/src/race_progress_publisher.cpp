@@ -59,12 +59,12 @@ std::filesystem::path resolveSampleTrackPath(const char * argv0)
 
 RaceCoordinator::VehicleRuntimePositions makePublisherRuntimePositions()
 {
-  return {{
+  return {
     {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
      {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
     {{-2.0, 0.5}, {-0.5, 0.7}, {1.0, 0.7}, {6.0, 0.6}, {11.0, 0.9}, {18.0, 5.3},
      {9.0, 5.5}, {0.5, 0.5}, {-1.0, 0.5}, {1.5, 0.4}, {4.0, 4.5}},
-  }};
+  };
 }
 
 class RaceProgressPublisher : public rclcpp::Node
@@ -100,11 +100,6 @@ public:
   }
 
 private:
-  SingleVehicleRuntime & runtimeAt(const std::size_t vehicle_index)
-  {
-    return coordinator_.runtime_at(vehicle_index);
-  }
-
   void publishVehicleLevelOutputsForTick(
     const std::string & vehicle_id, SingleVehicleRuntime & runtime,
     const SingleVehicleTickResult & tick_result)
@@ -176,9 +171,8 @@ private:
   {
     bool any_runtime_advanced = false;
 
-    for (std::size_t vehicle_index = 0; vehicle_index < coordinator_.vehicle_count(); ++vehicle_index) {
-      SingleVehicleRuntime & runtime = runtimeAt(vehicle_index);
-      const std::string & vehicle_id = coordinator_.participating_vehicle_ids()[vehicle_index];
+    for (const std::string & vehicle_id : coordinator_.participating_vehicle_ids()) {
+      SingleVehicleRuntime & runtime = coordinator_.runtime_for_vehicle(vehicle_id);
       const SingleVehicleTickResult tick_result = runtime.tick();
       if (!tick_result.advanced) {
         continue;

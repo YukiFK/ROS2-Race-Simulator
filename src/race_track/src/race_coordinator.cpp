@@ -1,6 +1,7 @@
 #include "race_track/race_coordinator.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <stdexcept>
 #include <utility>
 
@@ -14,15 +15,36 @@ RaceCoordinator::ParticipatingVehicleIds makeDefaultParticipatingVehicleIds()
   return {"demo_vehicle_1", "demo_vehicle_2"};
 }
 
+void validateIdsOnlyConstructorParticipatingVehicleIds(
+  const RaceCoordinator::ParticipatingVehicleIds & participating_vehicle_ids)
+{
+  if (participating_vehicle_ids.size() != makeDefaultParticipatingVehicleIds().size()) {
+    throw std::invalid_argument(
+            "RaceCoordinator ids-only constructor requires the current fixed 2-vehicle demo set size");
+  }
+}
+
 RaceCoordinator::VehicleRuntimes makeVehicleRuntimes(
   const TrackModel & track,
+  const RaceCoordinator::ParticipatingVehicleIds & participating_vehicle_ids,
   const RaceCoordinator::VehicleRuntimePositions & runtime_positions,
   const std::int64_t target_lap_count)
 {
-  return {
-    SingleVehicleRuntime(track, runtime_positions[0], target_lap_count),
-    SingleVehicleRuntime(track, runtime_positions[1], target_lap_count),
-  };
+  if (participating_vehicle_ids.empty()) {
+    throw std::invalid_argument("RaceCoordinator requires at least one participating vehicle");
+  }
+
+  if (participating_vehicle_ids.size() != runtime_positions.size()) {
+    throw std::invalid_argument(
+            "RaceCoordinator participating_vehicle_ids and runtime_positions size mismatch");
+  }
+
+  RaceCoordinator::VehicleRuntimes runtimes;
+  runtimes.reserve(participating_vehicle_ids.size());
+  for (const auto & positions : runtime_positions) {
+    runtimes.emplace_back(track, positions, target_lap_count);
+  }
+  return runtimes;
 }
 
 std::size_t findVehicleIndex(
@@ -71,6 +93,7 @@ RaceCoordinator::RaceCoordinator(
 : track_(std::move(track)),
   participating_vehicle_ids_(std::move(participating_vehicle_ids))
 {
+  validateIdsOnlyConstructorParticipatingVehicleIds(participating_vehicle_ids_);
 }
 
 RaceCoordinator::RaceCoordinator(
@@ -86,7 +109,7 @@ RaceCoordinator::RaceCoordinator(
   VehicleRuntimePositions runtime_positions, const std::int64_t target_lap_count)
 : track_(std::move(track)),
   participating_vehicle_ids_(std::move(participating_vehicle_ids)),
-  runtimes_(makeVehicleRuntimes(track_, runtime_positions, target_lap_count))
+  runtimes_(makeVehicleRuntimes(track_, participating_vehicle_ids_, runtime_positions, target_lap_count))
 {
 }
 
