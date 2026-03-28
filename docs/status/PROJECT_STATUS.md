@@ -35,6 +35,7 @@ current demo は **first multi-vehicle implementation slice** として、次が
   - validation
   - review checklist
   - milestone1
+  - `docs/design/race_manager_coordinator_api_boundary.md`
   - `docs/design/race_state_completed_laps_current_semantics.md`
   - README 導線
 
@@ -109,6 +110,9 @@ race-wide completion の判断は `race_state status` を主に見て、vehicle-
 - `RaceState.completed_laps` follow-up implementation planning
   - `RaceState` の race-wide responsibility を広げず、vehicle-local lap progress の主利用を `VehicleRaceStatus` に寄せる
   - 詳細は `docs/design/race_state_completed_laps_future_handling.md` を参照
+- race manager / coordinator API follow-up implementation issue
+  - boundary は `docs/design/race_manager_coordinator_api_boundary.md` で整理済み
+  - follow-up は small code change に限定し、`.msg` / runtime behavior / launch redesign を混ぜない
 
 ---
 
