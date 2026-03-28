@@ -36,6 +36,7 @@ current demo は **first multi-vehicle implementation slice** として、次が
   - review checklist
   - milestone1
   - `docs/design/race_manager_coordinator_api_boundary.md`
+  - `docs/design/pre_generalization_interface_boundary.md`
   - `docs/design/race_state_completed_laps_current_semantics.md`
   - README 導線
 
@@ -94,10 +95,7 @@ race-wide completion の判断は `race_state status` を主に見て、vehicle-
 
 優先順の推奨:
 
-1. `RaceState.completed_laps` の扱い整理（docs or small design issue）
-2. first slice の integration test 追加
-3. 3 台以上/generalization に進む前の interface 整理
-4. race manager / coordinator API の再整理
+1. 3 台以上/generalization implementation planning
 
 ---
 
@@ -107,12 +105,9 @@ race-wide completion の判断は `race_state status` を主に見て、vehicle-
 - なし
 
 次に着手する issue:
-- `RaceState.completed_laps` follow-up implementation planning
-  - `RaceState` の race-wide responsibility を広げず、vehicle-local lap progress の主利用を `VehicleRaceStatus` に寄せる
-  - 詳細は `docs/design/race_state_completed_laps_future_handling.md` を参照
-- race manager / coordinator API follow-up implementation issue
-  - boundary は `docs/design/race_manager_coordinator_api_boundary.md` で整理済み
-  - follow-up は small code change に限定し、`.msg` / runtime behavior / launch redesign を混ぜない
+- 3 台以上/generalization implementation planning
+  - pre-generalization interface stop line は `docs/design/pre_generalization_interface_boundary.md` で整理済み
+  - follow-up は participating vehicle count generalization に限定し、command scope / ownership split / `.msg` / launch redesign を混ぜない
 
 ---
 
