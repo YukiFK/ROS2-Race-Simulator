@@ -23,7 +23,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp)
-ament_target_dependencies(${PROJECT_NAME} race_interfaces)
+ament_target_dependencies(${PROJECT_NAME} PUBLIC race_interfaces)
 
 add_executable(track_demo
   src/track_demo.cpp
