@@ -96,13 +96,80 @@ public:
     RCLCPP_INFO(get_logger(), "Race coordinator initialized for %zu participating vehicles",
       coordinator_.vehicle_count());
     RCLCPP_INFO(get_logger(), "Waiting for race commands on /race_command");
-    publishRaceState();
+    publishRaceStateFromCoordinatorSource();
   }
 
 private:
   SingleVehicleRuntime & runtimeAt(const std::size_t vehicle_index)
   {
     return coordinator_.runtime_at(vehicle_index);
+  }
+
+  void publishVehicleLevelOutputsForTick(
+    const std::string & vehicle_id, SingleVehicleRuntime & runtime,
+    const SingleVehicleTickResult & tick_result)
+  {
+    if (tick_result.crossing_detected) {
+      publishLapEvent(vehicle_id, tick_result.step_sec, tick_result.progress_update);
+    }
+
+    publishVehicleRaceStatus(vehicle_id, tick_result.step_sec, tick_result.progress_update);
+
+    RCLCPP_INFO(
+      get_logger(),
+      "vehicle_id=%s step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
+      "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
+      vehicle_id.c_str(), runtime.step_index() - 1U, tick_result.current_position.x,
+      tick_result.current_position.y,
+      tick_result.progress_update.nearest_centerline_index,
+      tick_result.progress_update.distance_to_centerline,
+      tick_result.progress_update.is_off_track ? "true" : "false",
+      tick_result.progress_update.crossing_detected ? "true" : "false",
+      tick_result.progress_update.snapshot.lap_count,
+      tick_result.progress_update.snapshot.off_track_count);
+
+    if (tick_result.just_completed) {
+      RCLCPP_INFO(
+        get_logger(), "vehicle_id=%s target lap count reached (%d/%ld), marking runtime completed",
+        vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
+      return;
+    }
+
+    if (tick_result.stopped_without_completion) {
+      RCLCPP_WARN(
+        get_logger(),
+        "vehicle_id=%s progression stopped at end of fixed positions before reaching target laps "
+        "(%d/%ld)",
+        vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
+    }
+  }
+
+  void applyRaceWideCommand(const std::uint8_t command)
+  {
+    // ROS command ingress lives here; race-wide command application policy stays in RaceCoordinator.
+    switch (command) {
+      case race_interfaces::msg::RaceCommand::START:
+        if (coordinator_.start()) {
+          RCLCPP_INFO(
+            get_logger(), "Received START after completion or final step, resetting progression first");
+        }
+        publishRaceStateFromCoordinatorSource();
+        RCLCPP_INFO(get_logger(), "Received START command, progression started");
+        return;
+      case race_interfaces::msg::RaceCommand::STOP:
+        coordinator_.stop();
+        publishRaceStateFromCoordinatorSource();
+        RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
+        return;
+      case race_interfaces::msg::RaceCommand::RESET:
+        coordinator_.reset();
+        publishRaceStateFromCoordinatorSource();
+        RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
+        return;
+      default:
+        RCLCPP_WARN(get_logger(), "Received unknown race command: %u", command);
+        return;
+    }
   }
 
   void onTimer()
@@ -118,72 +185,17 @@ private:
       }
 
       any_runtime_advanced = true;
-
-      if (tick_result.crossing_detected) {
-        publishLapEvent(vehicle_id, tick_result.step_sec, tick_result.progress_update);
-      }
-
-      publishVehicleRaceStatus(vehicle_id, tick_result.step_sec, tick_result.progress_update);
-
-      RCLCPP_INFO(
-        get_logger(),
-        "vehicle_id=%s step=%zu position=(%.3f, %.3f) nearest_centerline_index=%zu distance=%.3f "
-        "off_track=%s crossing=%s lap_count=%d off_track_count=%d",
-        vehicle_id.c_str(), runtime.step_index() - 1U, tick_result.current_position.x,
-        tick_result.current_position.y,
-        tick_result.progress_update.nearest_centerline_index,
-        tick_result.progress_update.distance_to_centerline,
-        tick_result.progress_update.is_off_track ? "true" : "false",
-        tick_result.progress_update.crossing_detected ? "true" : "false",
-        tick_result.progress_update.snapshot.lap_count,
-        tick_result.progress_update.snapshot.off_track_count);
-
-      if (tick_result.just_completed) {
-        RCLCPP_INFO(
-          get_logger(), "vehicle_id=%s target lap count reached (%d/%ld), marking runtime completed",
-          vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
-        continue;
-      }
-
-      if (tick_result.stopped_without_completion) {
-        RCLCPP_WARN(
-          get_logger(),
-          "vehicle_id=%s progression stopped at end of fixed positions before reaching target laps "
-          "(%d/%ld)",
-          vehicle_id.c_str(), tick_result.progress_update.snapshot.lap_count, target_lap_count_);
-      }
+      publishVehicleLevelOutputsForTick(vehicle_id, runtime, tick_result);
     }
 
     if (any_runtime_advanced) {
-      publishRaceState();
+      publishRaceStateFromCoordinatorSource();
     }
   }
 
   void onRaceCommand(const race_interfaces::msg::RaceCommand::SharedPtr msg)
   {
-    switch (msg->command) {
-      case race_interfaces::msg::RaceCommand::START:
-        if (coordinator_.start()) {
-          RCLCPP_INFO(
-            get_logger(), "Received START after completion or final step, resetting progression first");
-        }
-        publishRaceState();
-        RCLCPP_INFO(get_logger(), "Received START command, progression started");
-        break;
-      case race_interfaces::msg::RaceCommand::STOP:
-        coordinator_.stop();
-        publishRaceState();
-        RCLCPP_INFO(get_logger(), "Received STOP command, progression stopped");
-        break;
-      case race_interfaces::msg::RaceCommand::RESET:
-        coordinator_.reset();
-        publishRaceState();
-        RCLCPP_INFO(get_logger(), "Received RESET command, progression reset");
-        break;
-      default:
-        RCLCPP_WARN(get_logger(), "Received unknown race command: %u", msg->command);
-        break;
-    }
+    applyRaceWideCommand(msg->command);
   }
 
   void publishLapEvent(
@@ -193,11 +205,13 @@ private:
     lap_event_publisher_->publish(lap_event_assembler_.assemble(step_sec, vehicle_id, progress_update));
   }
 
-  void publishRaceState()
+  void publishRaceStateFromCoordinatorSource()
   {
+    // RaceCoordinator owns race-wide state meaning; this node only owns ROS publish transport.
+    const RaceCoordinator::RaceStateSource race_state_source =
+      coordinator_.current_race_state_source();
     race_interfaces::msg::RaceState race_state = race_state_assembler_.assemble(
-      coordinator_.current_race_status(), coordinator_.current_step_sec(),
-      coordinator_.primary_snapshot());
+      race_state_source.race_status, race_state_source.step_sec, race_state_source.primary_snapshot);
     race_state_publisher_->publish(race_state);
   }
 
