@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -26,18 +25,27 @@ TrackModel makeTrack()
 
 RaceCoordinator::VehicleRuntimePositions makeRuntimePositions()
 {
-  return {{
+  return {
     {{0.0, 0.0}, {5.0, 0.0}, {10.0, 0.0}},
     {{0.0, 0.5}, {5.0, 0.5}, {10.0, 0.5}},
-  }};
+  };
 }
 
 RaceCoordinator::VehicleRuntimePositions makeStaggeredRuntimePositions()
 {
-  return {{
+  return {
     {{-1.0, 0.0}, {1.0, 0.0}, {5.0, 0.0}},
     {{-1.0, 0.5}, {-0.5, 0.5}, {-0.2, 0.5}, {1.0, 0.5}, {5.0, 0.5}},
-  }};
+  };
+}
+
+RaceCoordinator::VehicleRuntimePositions makeThreeVehicleRuntimePositions()
+{
+  return {
+    {{0.0, 0.0}, {5.0, 0.0}, {10.0, 0.0}},
+    {{0.0, 0.5}, {5.0, 0.5}, {10.0, 0.5}},
+    {{0.0, 1.0}, {5.0, 1.0}, {10.0, 1.0}},
+  };
 }
 
 TEST(RaceCoordinatorTest, ExposesDefaultParticipatingVehicleIdsAndCount)
@@ -62,6 +70,16 @@ TEST(RaceCoordinatorTest, OwnsTrackAndSupportsFixedVehicleIdsOverride)
   EXPECT_EQ(coordinator.track().centerline.size(), 3U);
   EXPECT_EQ(coordinator.participating_vehicle_ids()[0], "alpha_vehicle");
   EXPECT_EQ(coordinator.participating_vehicle_ids()[1], "beta_vehicle");
+}
+
+TEST(RaceCoordinatorTest, IdsOnlyConstructorRejectsNonDemoVehicleCount)
+{
+  EXPECT_THROW(
+    static_cast<void>(RaceCoordinator(
+      makeTrack(),
+      RaceCoordinator::ParticipatingVehicleIds{
+        "alpha_vehicle", "beta_vehicle", "gamma_vehicle"})),
+    std::invalid_argument);
 }
 
 TEST(RaceCoordinatorTest, DoesNotCreateHiddenDefaultRuntimes)
@@ -105,6 +123,42 @@ TEST(RaceCoordinatorTest, RejectsUnknownParticipatingVehicleIdLookup)
   EXPECT_THROW(static_cast<void>(coordinator.runtime_at(2U)), std::out_of_range);
   EXPECT_THROW(
     static_cast<void>(coordinator.runtime_for_vehicle("missing_vehicle")), std::out_of_range);
+}
+
+TEST(RaceCoordinatorTest, SupportsVariableLengthParticipatingVehicleSets)
+{
+  RaceCoordinator coordinator(
+    makeTrack(),
+    RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle", "gamma_vehicle"},
+    makeThreeVehicleRuntimePositions(), 2);
+
+  ASSERT_EQ(coordinator.vehicle_count(), 3U);
+  EXPECT_EQ(coordinator.runtime_at(2U).step_index(), 0U);
+  EXPECT_EQ(&coordinator.runtime_for_vehicle("gamma_vehicle"), &coordinator.runtime_at(2U));
+
+  EXPECT_FALSE(coordinator.start());
+  EXPECT_TRUE(coordinator.runtime_for_vehicle("alpha_vehicle").running());
+  EXPECT_TRUE(coordinator.runtime_for_vehicle("beta_vehicle").running());
+  EXPECT_TRUE(coordinator.runtime_for_vehicle("gamma_vehicle").running());
+}
+
+TEST(RaceCoordinatorTest, RejectsEmptyParticipatingVehicleSetWhenCreatingRuntimes)
+{
+  EXPECT_THROW(
+    static_cast<void>(RaceCoordinator(
+      makeTrack(), RaceCoordinator::ParticipatingVehicleIds{}, RaceCoordinator::VehicleRuntimePositions{},
+      2)),
+    std::invalid_argument);
+}
+
+TEST(RaceCoordinatorTest, RejectsParticipatingVehicleIdAndRuntimePositionSizeMismatch)
+{
+  EXPECT_THROW(
+    static_cast<void>(RaceCoordinator(
+      makeTrack(),
+      RaceCoordinator::ParticipatingVehicleIds{"alpha_vehicle", "beta_vehicle", "gamma_vehicle"},
+      makeRuntimePositions(), 2)),
+    std::invalid_argument);
 }
 
 TEST(RaceCoordinatorTest, AppliesGlobalCommandsToBothParticipatingRuntimes)
