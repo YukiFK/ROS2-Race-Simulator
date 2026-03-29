@@ -7,7 +7,7 @@ current 2-vehicle demo を前提にした開発用の最小 validation 手順で
 
 - `ros2 launch race_track race_progress_demo.launch.py` を使う current demo の確認に限定する
 - default validation は `demo_vehicle_1` と `demo_vehicle_2` の 2 台固定 config を対象とする
-- 3 台以上の config injection は sample params file で可能だが、この文書の最小回帰手順には含めない
+- 3 台以上の config injection は sample params file で可能だが、この文書の最小回帰手順とは分けて manual validation path として扱う
 - `RaceState` は race-wide state の観測手段として扱う
 - `VehicleRaceStatus` と `LapEvent` は vehicle-local 観測手段として扱う
 - race-wide completion は `all participating vehicles finished` とする
@@ -178,6 +178,94 @@ monitor 側の期待:
 - `has_finished=true` は vehicle-local completion を表す
 - `race_state status=completed` は all participating vehicles finished を表す
 - current implementation の `RaceState.completed_laps` は primary vehicle snapshot 由来であり、2 台全体の集約値ではない
+
+## Three-Vehicle Sample Config Manual Path
+
+default 2-vehicle validation path はそのまま維持しつつ、entry/config override で 3 台 path を人間が再現確認する手順です。
+使うのは installed config の `race_progress_demo_three_vehicle.publisher.yaml` だけで、default launch behavior は変えません。
+
+### 1. Launch With Override
+
+ターミナル A:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch race_track race_progress_demo.launch.py \
+  publisher_params_file:=$(ros2 pkg prefix race_track)/share/race_track/race_progress_demo_three_vehicle.publisher.yaml
+```
+
+起動直後の期待:
+
+- publisher 側に `Target lap count: 2`
+- publisher 側に `Race coordinator initialized for 3 participating vehicles`
+- monitor 側に `Monitoring /race_state (race-wide), /vehicle_race_status (vehicle-local), and /lap_event`
+- monitor 側に `race_state status=stopped`
+
+### 2. Start
+
+ターミナル B:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run race_track race_command_cli start
+```
+
+期待:
+
+- CLI 側に `sent START`
+- monitor 側に `race_state status=running`
+- monitor 側に `vehicle_race_status vehicle_id=demo_vehicle_1 ...`
+- monitor 側に `vehicle_race_status vehicle_id=demo_vehicle_2 ...`
+- monitor 側に `vehicle_race_status vehicle_id=demo_vehicle_3 ...`
+- monitor 側に `lap_event vehicle_id=demo_vehicle_1 lap_count=1 ...`
+- monitor 側に `lap_event vehicle_id=demo_vehicle_2 lap_count=1 ...`
+- monitor 側に `lap_event vehicle_id=demo_vehicle_3 lap_count=1 ...`
+
+### 3. Completion Semantics
+
+monitor 側で次を確認します。
+
+- `demo_vehicle_1` と `demo_vehicle_2` が先に `has_finished=true` になっても、`demo_vehicle_3` が未完了なら `race_state status=running` のまま
+- つまり、2 台 finished だけでは `race_state status=completed` にならない
+- `demo_vehicle_3` も `has_finished=true` になった後にだけ `race_state status=completed` になる
+
+補足:
+
+- current sample config では 3 台目の runtime positions が長いため、3 台目が最後に finish しやすい
+- `RaceState.completed_laps` は 3 台 aggregate ではないため、completion 判定は `race_state status` と各 `VehicleRaceStatus.has_finished` で追う
+
+### 4. Optional Topic Echo Cross-Check
+
+monitor 出力が速くて追いにくい場合は、別ターミナルで次を使います。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 topic echo --no-daemon /vehicle_race_status
+ros2 topic echo --no-daemon /lap_event
+```
+
+見る点:
+
+- `/vehicle_race_status` で `demo_vehicle_1`、`demo_vehicle_2`、`demo_vehicle_3` の 3 台すべてを観測できる
+- `/lap_event` でも 3 台すべての `vehicle_id` を観測できる
+- `has_finished=true` が 2 台分だけ見えている間は `race_state status=completed` にならない
+
+### 5. Stop / Reset
+
+3 台 path でも操作は default path と同じです。
+
+```bash
+ros2 run race_track race_command_cli stop
+ros2 run race_track race_command_cli reset
+```
+
+期待:
+
+- `stop` で 3 台分の progress 更新が止まる
+- `reset` 後は 3 台とも `lap_count=0`、`has_finished=false` の初期状態から再開できる
 
 ## Quick Checks
 

@@ -272,6 +272,18 @@ ros2 launch race_track race_progress_demo.launch.py \
 
 この override は default behavior を変えず、entry/config 側だけで 3 台以上を追加できます。
 
+3 台 sample config の最小観測:
+
+- `Race coordinator initialized for 3 participating vehicles`
+- `vehicle_race_status vehicle_id=demo_vehicle_1 ...`
+- `vehicle_race_status vehicle_id=demo_vehicle_2 ...`
+- `vehicle_race_status vehicle_id=demo_vehicle_3 ...`
+- `lap_event vehicle_id=demo_vehicle_1 ...`
+- `lap_event vehicle_id=demo_vehicle_2 ...`
+- `lap_event vehicle_id=demo_vehicle_3 ...`
+- 2 台だけ `has_finished=true` の時点では `race_state status=running`
+- 3 台全員が `has_finished=true` になった後にだけ `race_state status=completed`
+
 ### Command CLI
 
 もう 1 つ別ターミナルを開き、`race_command_cli` で操作します。
