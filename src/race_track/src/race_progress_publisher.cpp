@@ -9,6 +9,7 @@
 #include "race_interfaces/msg/race_command.hpp"
 #include "race_interfaces/msg/race_state.hpp"
 #include "race_interfaces/msg/vehicle_race_status.hpp"
+#include "race_track/demo_runtime_config.hpp"
 #include "race_track/lap_event_assembler.hpp"
 #include "race_track/race_coordinator.hpp"
 #include "race_track/race_state_assembler.hpp"
@@ -57,14 +58,15 @@ std::filesystem::path resolveSampleTrackPath(const char * argv0)
   throw std::runtime_error("Failed to locate config/sample_track.yaml");
 }
 
-RaceCoordinator::VehicleRuntimePositions makePublisherRuntimePositions()
+RaceCoordinator makeConfiguredDemoCoordinator(
+  const std::filesystem::path & sample_track_path,
+  const RaceCoordinator::ParticipatingVehicleIds & participating_vehicle_ids,
+  const std::vector<std::string> & runtime_position_specs,
+  const std::int64_t target_lap_count)
 {
-  return {
-    {{-2.0, 0.0}, {-0.5, 0.2}, {1.0, 0.2}, {6.0, 0.1}, {11.0, 0.4}, {18.0, 4.8},
-     {9.0, 5.0}, {0.5, 0.0}, {-1.0, 0.0}, {1.5, -0.1}, {4.0, 4.0}},
-    {{-2.0, 0.5}, {-0.5, 0.7}, {1.0, 0.7}, {6.0, 0.6}, {11.0, 0.9}, {18.0, 5.3},
-     {9.0, 5.5}, {0.5, 0.5}, {-1.0, 0.5}, {1.5, 0.4}, {4.0, 4.5}},
-  };
+  return RaceCoordinator(
+    loadTrackFromYaml(sample_track_path.string()), participating_vehicle_ids,
+    parseRuntimePositionSpecs(runtime_position_specs), target_lap_count);
 }
 
 class RaceProgressPublisher : public rclcpp::Node
@@ -73,9 +75,13 @@ public:
   explicit RaceProgressPublisher(const std::filesystem::path & sample_track_path)
   : Node("race_progress_publisher"),
     target_lap_count_(declare_parameter<std::int64_t>("target_lap_count", 2)),
+    participating_vehicle_ids_(declare_parameter<decltype(participating_vehicle_ids_)>(
+        "participating_vehicle_ids", defaultDemoParticipatingVehicleIds())),
+    runtime_position_specs_(declare_parameter<decltype(runtime_position_specs_)>(
+        "runtime_position_specs", defaultDemoRuntimePositionSpecs())),
     coordinator_(
-      loadTrackFromYaml(sample_track_path.string()), makePublisherRuntimePositions(),
-      target_lap_count_)
+      makeConfiguredDemoCoordinator(
+        sample_track_path, participating_vehicle_ids_, runtime_position_specs_, target_lap_count_))
   {
     validateTrackOrThrow(coordinator_.track());
 
@@ -218,6 +224,8 @@ private:
   }
 
   std::int64_t target_lap_count_{2};
+  RaceCoordinator::ParticipatingVehicleIds participating_vehicle_ids_;
+  std::vector<std::string> runtime_position_specs_;
   RaceCoordinator coordinator_;
   LapEventAssembler lap_event_assembler_;
   RaceStateAssembler race_state_assembler_;

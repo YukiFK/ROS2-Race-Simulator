@@ -8,11 +8,13 @@
 
 ## 現在の状態
 - current demo は first multi-vehicle implementation slice
-- participating vehicles は固定 2 台
+- default participating vehicles は 2 台
   - `demo_vehicle_1`
   - `demo_vehicle_2`
+- default launch は 2 台固定のまま
+- entry/config override では 3 台以上の participating vehicles と runtime positions を流し込める
 - `RaceCoordinator` が race-level owner
-- 2 台分の `SingleVehicleRuntime` を所有
+- configurable な participating vehicle set に対応する `SingleVehicleRuntime` 群を所有
 - global `START` / `STOP` / `RESET` は 2 台へ適用済み
 - `VehicleRaceStatus` / `LapEvent` は 2 台分 publish 済み
 - race-wide `completed` は `all participating vehicles finished`

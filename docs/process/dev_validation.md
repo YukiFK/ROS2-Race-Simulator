@@ -6,7 +6,8 @@ current 2-vehicle demo を前提にした開発用の最小 validation 手順で
 ## Scope
 
 - `ros2 launch race_track race_progress_demo.launch.py` を使う current demo の確認に限定する
-- participating vehicles は `demo_vehicle_1` と `demo_vehicle_2` の 2 台固定とする
+- default validation は `demo_vehicle_1` と `demo_vehicle_2` の 2 台固定 config を対象とする
+- 3 台以上の config injection は sample params file で可能だが、この文書の最小回帰手順には含めない
 - `RaceState` は race-wide state の観測手段として扱う
 - `VehicleRaceStatus` と `LapEvent` は vehicle-local 観測手段として扱う
 - race-wide completion は `all participating vehicles finished` とする

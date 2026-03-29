@@ -219,7 +219,10 @@ colcon test-result --verbose
 - `race_progress_monitor`: `/race_state`、`/vehicle_race_status`、`/lap_event` を subscribe して画面に表示する
 - `race_command_cli`: `start` / `stop` / `reset` を `/race_command` に publish する
 
-current demo は first multi-vehicle implementation slice として、`demo_vehicle_1` と `demo_vehicle_2` の 2 台固定 participating vehicles を前提にしています。
+current demo は first multi-vehicle implementation slice として、default launch では
+`demo_vehicle_1` と `demo_vehicle_2` の 2 台 participating vehicles を前提にしています。
+一方で entry/config では、matching する `participating_vehicle_ids` と `runtime_position_specs`
+を与えることで 3 台以上を流し込めます。
 
 観測責務は次のように分かれています。
 
@@ -249,13 +252,25 @@ source install/setup.bash
 ros2 launch race_track race_progress_demo.launch.py
 ```
 
-この launch は `race_progress_publisher` に `target_lap_count:=2` を渡します。
+この launch は default では `config/race_progress_demo.publisher.yaml` を通して
+`race_progress_publisher` に current 2-vehicle demo config を渡します。
 
 起動直後の期待:
 
 - publisher 側に `Target lap count: 2`
 - publisher 側に `Race coordinator initialized for 2 participating vehicles`
 - monitor 側に `race_state status=stopped`
+
+3 台 sample config を流し込みたい場合:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch race_track race_progress_demo.launch.py \
+  publisher_params_file:=$(ros2 pkg prefix race_track)/share/race_track/race_progress_demo_three_vehicle.publisher.yaml
+```
+
+この override は default behavior を変えず、entry/config 側だけで 3 台以上を追加できます。
 
 ### Command CLI
 
