@@ -8,6 +8,7 @@ find_package(yaml-cpp REQUIRED)
 
 add_library(${PROJECT_NAME}
   src/completion_evaluator.cpp
+  src/demo_runtime_config.cpp
   src/geometry.cpp
   src/lap_event_assembler.cpp
   src/progress_tracker.cpp
@@ -125,6 +126,11 @@ if(BUILD_TESTING)
     test/test_completion_evaluator.cpp
   )
   target_link_libraries(test_completion_evaluator ${PROJECT_NAME})
+
+  ament_add_gtest(test_demo_runtime_config
+    test/test_demo_runtime_config.cpp
+  )
+  target_link_libraries(test_demo_runtime_config ${PROJECT_NAME})
 
   ament_add_gtest(test_race_state_assembler
     test/test_race_state_assembler.cpp

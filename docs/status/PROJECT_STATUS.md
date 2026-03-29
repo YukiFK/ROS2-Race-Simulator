@@ -22,11 +22,15 @@
 ### 完了済み
 current demo は **first multi-vehicle implementation slice** として、次が repo に取り込まれている状態。
 
-- fixed participating vehicles は 2 台
+- default participating vehicles は 2 台
   - `demo_vehicle_1`
   - `demo_vehicle_2`
+- default `race_progress_demo` は 2 台固定のまま維持
+- `race_progress_demo` entry/config では explicit config により 3 台以上の participating vehicles と
+  runtime positions を流し込める
 - `RaceCoordinator` が race-level owner として存在する
-- `RaceCoordinator` は 2 台分の `SingleVehicleRuntime` を所有できる
+- `RaceCoordinator` は configurable な participating vehicle set に対応する
+  `SingleVehicleRuntime` 群を所有できる
 - global `START` / `STOP` / `RESET` は 2 台の runtime に race-wide に適用される
 - `VehicleRaceStatus` は 2 台分 publish される
 - `LapEvent` は 2 台分 publish される
@@ -69,7 +73,7 @@ current demo は **first multi-vehicle implementation slice** として、次が
 - leaderboard / result table
 - DNF / DNS / disqualification
 - dynamic join / leave
-- 3 台以上への一般化
+- default demo behavior を超える runtime generalization
 - race manager の独立 node 化
 - `RaceState` schema redesign
 - `RaceState.completed_laps` の最終整理
