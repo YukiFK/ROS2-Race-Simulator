@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -46,6 +47,7 @@ constexpr auto kPostCommandSettleDelay = 200ms;
 constexpr char kPublisherExecutable[] = "race_progress_publisher";
 constexpr char kVehicleOneId[] = "demo_vehicle_1";
 constexpr char kVehicleTwoId[] = "demo_vehicle_2";
+constexpr char kVehicleThreeId[] = "demo_vehicle_3";
 
 std::string makeIsolatedRosDomainId()
 {
@@ -60,10 +62,22 @@ std::filesystem::path resolvePublisherExecutablePath()
   return package_prefix / "lib" / "race_track" / kPublisherExecutable;
 }
 
+std::filesystem::path resolveInstalledConfigPath(const std::string & file_name)
+{
+  const std::filesystem::path package_prefix =
+    ament_index_cpp::get_package_prefix("race_track");
+  const std::filesystem::path config_path = package_prefix / "share" / "race_track" / file_name;
+  if (!std::filesystem::exists(config_path)) {
+    throw std::runtime_error("Failed to locate installed config file: " + config_path.string());
+  }
+
+  return config_path;
+}
+
 class ScopedPublisherProcess
 {
 public:
-  ScopedPublisherProcess()
+  explicit ScopedPublisherProcess(const std::optional<std::filesystem::path> & params_file = std::nullopt)
   {
     const std::filesystem::path executable_path = resolvePublisherExecutablePath();
     if (!std::filesystem::exists(executable_path)) {
@@ -77,16 +91,23 @@ public:
 
     if (child_pid_ == 0) {
       const std::string executable_string = executable_path.string();
-      std::vector<char> target_lap_count_arg = {'t', 'a', 'r', 'g', 'e', 't', '_', 'l', 'a', 'p', '_',
-        'c', 'o', 'u', 'n', 't', ':', '=', '2', '\0'};
-      char * const argv[] = {
-        const_cast<char *>(executable_string.c_str()),
-        const_cast<char *>("--ros-args"),
-        const_cast<char *>("-p"),
-        target_lap_count_arg.data(),
-        nullptr,
-      };
-      ::execv(executable_string.c_str(), argv);
+      std::vector<std::string> arguments = {executable_string, "--ros-args"};
+      if (params_file.has_value()) {
+        arguments.push_back("--params-file");
+        arguments.push_back(params_file->string());
+      } else {
+        arguments.push_back("-p");
+        arguments.push_back("target_lap_count:=2");
+      }
+
+      std::vector<char *> argv;
+      argv.reserve(arguments.size() + 1U);
+      for (std::string & argument : arguments) {
+        argv.push_back(argument.data());
+      }
+      argv.push_back(nullptr);
+
+      ::execv(executable_string.c_str(), argv.data());
       std::perror("execv");
       _exit(1);
     }
@@ -131,8 +152,10 @@ private:
 class IntegrationObserver : public rclcpp::Node
 {
 public:
-  IntegrationObserver()
-  : Node("race_progress_integration_test")
+  explicit IntegrationObserver(std::vector<std::string> expected_vehicle_ids)
+  : Node("race_progress_integration_test"),
+    expected_vehicle_ids_(
+      expected_vehicle_ids.begin(), expected_vehicle_ids.end())
   {
     race_state_subscription_ = create_subscription<race_interfaces::msg::RaceState>(
       "/race_state", 10,
@@ -176,28 +199,58 @@ public:
 
   bool hasVehicleStatusesForBothVehicles() const
   {
+    return hasVehicleStatusesForAllExpectedVehicles();
+  }
+
+  bool hasVehicleStatusesForAllExpectedVehicles() const
+  {
     std::scoped_lock lock(mutex_);
-    return latest_vehicle_statuses_.count(kVehicleOneId) > 0U &&
-      latest_vehicle_statuses_.count(kVehicleTwoId) > 0U;
+    for (const std::string & vehicle_id : expected_vehicle_ids_) {
+      if (latest_vehicle_statuses_.count(vehicle_id) == 0U) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool hasLapEventsForBothVehicles() const
   {
+    return hasLapEventsForAllExpectedVehicles();
+  }
+
+  bool hasLapEventsForAllExpectedVehicles() const
+  {
     std::scoped_lock lock(mutex_);
-    return observed_lap_event_vehicle_ids_.count(kVehicleOneId) > 0U &&
-      observed_lap_event_vehicle_ids_.count(kVehicleTwoId) > 0U;
+    for (const std::string & vehicle_id : expected_vehicle_ids_) {
+      if (observed_lap_event_vehicle_ids_.count(vehicle_id) == 0U) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool observedRunningWhileOnlyOneVehicleFinished() const
   {
+    return observedRunningBeforeCompletionWhenFinishedCountReached(1U);
+  }
+
+  bool observedRunningBeforeCompletionWhenFinishedCountReached(
+    const std::size_t finished_vehicle_count) const
+  {
     std::scoped_lock lock(mutex_);
-    return observed_single_vehicle_finished_before_completion_;
+    return observed_non_completed_finished_counts_.count(finished_vehicle_count) > 0U;
   }
 
   bool raceCompletedAfterBothVehiclesFinished() const
   {
+    return raceCompletedAfterAllExpectedVehiclesFinished();
+  }
+
+  bool raceCompletedAfterAllExpectedVehiclesFinished() const
+  {
     std::scoped_lock lock(mutex_);
-    return latest_race_status_ == "completed" && finished_vehicle_ids_.size() == 2U;
+    return latest_race_status_ == "completed" &&
+      finished_vehicle_ids_.size() == expected_vehicle_ids_.size();
   }
 
   bool raceStopped() const
@@ -249,8 +302,8 @@ private:
     latest_vehicle_statuses_[msg->vehicle_id] = SequencedVehicleStatus{*msg, total_vehicle_status_count_};
     if (msg->has_finished) {
       finished_vehicle_ids_.insert(msg->vehicle_id);
-      if (finished_vehicle_ids_.size() == 1U && latest_race_status_ != "completed") {
-        observed_single_vehicle_finished_before_completion_ = true;
+      if (latest_race_status_ != "completed") {
+        observed_non_completed_finished_counts_.insert(finished_vehicle_ids_.size());
       }
     }
   }
@@ -264,9 +317,10 @@ private:
   mutable std::mutex mutex_;
   std::string latest_race_status_;
   std::map<std::string, SequencedVehicleStatus> latest_vehicle_statuses_;
+  std::set<std::string> expected_vehicle_ids_;
   std::set<std::string> observed_lap_event_vehicle_ids_;
   std::set<std::string> finished_vehicle_ids_;
-  bool observed_single_vehicle_finished_before_completion_{false};
+  std::set<std::size_t> observed_non_completed_finished_counts_;
   std::size_t total_vehicle_status_count_{0U};
   rclcpp::Subscription<race_interfaces::msg::RaceState>::SharedPtr race_state_subscription_;
   rclcpp::Subscription<race_interfaces::msg::VehicleRaceStatus>::SharedPtr
@@ -302,8 +356,8 @@ protected:
 
   void SetUp() override
   {
-    publisher_process_ = std::make_unique<ScopedPublisherProcess>();
-    observer_ = std::make_shared<IntegrationObserver>();
+    publisher_process_ = std::make_unique<ScopedPublisherProcess>(publisherParamsFile());
+    observer_ = std::make_shared<IntegrationObserver>(expectedVehicleIds());
     executor_.add_node(observer_);
 
     ASSERT_TRUE(spinUntil(
@@ -354,9 +408,33 @@ protected:
     spinFor(kPostCommandSettleDelay);
   }
 
+  virtual std::vector<std::string> expectedVehicleIds() const
+  {
+    return {kVehicleOneId, kVehicleTwoId};
+  }
+
+  virtual std::optional<std::filesystem::path> publisherParamsFile() const
+  {
+    return std::nullopt;
+  }
+
   rclcpp::executors::SingleThreadedExecutor executor_;
   std::shared_ptr<IntegrationObserver> observer_;
   std::unique_ptr<ScopedPublisherProcess> publisher_process_;
+};
+
+class RaceProgressIntegrationThreeVehicleConfigTest : public RaceProgressIntegrationTest
+{
+protected:
+  std::vector<std::string> expectedVehicleIds() const override
+  {
+    return {kVehicleOneId, kVehicleTwoId, kVehicleThreeId};
+  }
+
+  std::optional<std::filesystem::path> publisherParamsFile() const override
+  {
+    return resolveInstalledConfigPath("race_progress_demo_three_vehicle.publisher.yaml");
+  }
 };
 
 TEST_F(RaceProgressIntegrationTest, PublishesTwoVehicleProgressAndCompletesOnlyAfterBothFinish)
@@ -384,6 +462,37 @@ TEST_F(RaceProgressIntegrationTest, PublishesTwoVehicleProgressAndCompletesOnlyA
   EXPECT_TRUE(spinUntil(
     [this]() {
       return observer_->raceCompletedAfterBothVehiclesFinished();
+    },
+    kRaceCompletionTimeout));
+}
+
+TEST_F(
+  RaceProgressIntegrationThreeVehicleConfigTest,
+  PublishesThreeVehicleProgressAndCompletesOnlyAfterAllThreeFinish)
+{
+  publishCommandAndAllowDelivery(race_interfaces::msg::RaceCommand::START);
+
+  EXPECT_TRUE(spinUntil(
+    [this]() {
+      return observer_->hasVehicleStatusesForAllExpectedVehicles();
+    },
+    kTwoVehicleStatusTimeout));
+
+  EXPECT_TRUE(spinUntil(
+    [this]() {
+      return observer_->hasLapEventsForAllExpectedVehicles();
+    },
+    kLapEventTimeout));
+
+  EXPECT_TRUE(spinUntil(
+    [this]() {
+      return observer_->observedRunningBeforeCompletionWhenFinishedCountReached(2U);
+    },
+    kRaceCompletionTimeout));
+
+  EXPECT_TRUE(spinUntil(
+    [this]() {
+      return observer_->raceCompletedAfterAllExpectedVehiclesFinished();
     },
     kRaceCompletionTimeout));
 }
